@@ -2066,95 +2066,116 @@ function MenuButton({ icon, label, desc, color, onClick }) {
   );
 }
 
-/* ====== 사신(四神) 수호대 캐릭터 ====== */
-const Cheongnyong = ({ size = 64 }) => ( // 청룡 (동)
-  <svg width={size} height={size} viewBox="0 0 100 100">
-    <path d="M40 22 q-5 -13 -11 -15 q7 3 9 13 z" fill="#E8A020" />
-    <path d="M60 22 q5 -13 11 -15 q-7 3 -9 13 z" fill="#E8A020" />
-    <path d="M30 30 Q25 15 39 17 Q34 25 43 23" fill="#1B6FA8" />
-    <ellipse cx="50" cy="53" rx="30" ry="27" fill="#3FB0E0" />
-    <ellipse cx="50" cy="61" rx="20" ry="15" fill="#C6E9F8" />
-    <path d="M22 54 Q9 51 5 58" stroke="#1B6FA8" strokeWidth="2.6" fill="none" strokeLinecap="round" />
-    <path d="M78 54 Q91 51 95 58" stroke="#1B6FA8" strokeWidth="2.6" fill="none" strokeLinecap="round" />
-    <circle cx="40" cy="49" r="8" fill="#fff" /><circle cx="60" cy="49" r="8" fill="#fff" />
-    <circle cx="41" cy="50" r="4" fill="#173B4F" /><circle cx="61" cy="50" r="4" fill="#173B4F" />
-    <circle cx="42.6" cy="48.4" r="1.4" fill="#fff" /><circle cx="62.6" cy="48.4" r="1.4" fill="#fff" />
-    <circle cx="45" cy="63" r="1.6" fill="#1B6FA8" /><circle cx="55" cy="63" r="1.6" fill="#1B6FA8" />
-    <path d="M44 69 Q50 74 56 69" stroke="#1B6FA8" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+/* ====== 사신(四神) 수호대 엠블럼 ====== */
+const Crest = () => (
+  <svg width="96" height="44" viewBox="0 0 96 44">
+    <g stroke="#C9A24A" strokeWidth="2.4" strokeLinecap="round">
+      <line x1="26" y1="36" x2="70" y2="8" /><line x1="70" y1="36" x2="26" y2="8" />
+    </g>
+    <path d="M48 4 L66 11 V23 Q66 37 48 42 Q30 37 30 23 V11 Z" fill="#1c1812" stroke="#C9A24A" strokeWidth="2.2" />
+    <text x="48" y="20" textAnchor="middle" fontFamily="serif" fontSize="11" fill="#EBCB67">四</text>
+    <text x="48" y="33" textAnchor="middle" fontFamily="serif" fontSize="11" fill="#EBCB67">神</text>
   </svg>
 );
-const Baekho = ({ size = 64 }) => ( // 백호 (서)
+const Cheongnyong = ({ size = 74 }) => ( // 청룡 (동)
   <svg width={size} height={size} viewBox="0 0 100 100">
-    <path d="M26 30 L22 11 L41 25 Z" fill="#EFEFEF" /><path d="M74 30 L78 11 L59 25 Z" fill="#EFEFEF" />
-    <path d="M28 26 L26 17 L37 24 Z" fill="#F2A6B8" /><path d="M72 26 L74 17 L63 24 Z" fill="#F2A6B8" />
-    <ellipse cx="50" cy="54" rx="32" ry="29" fill="#FAFAFA" stroke="#E3E3E3" strokeWidth="2" />
-    <path d="M50 27 L50 39" stroke="#3A3A3A" strokeWidth="3" strokeLinecap="round" />
-    <path d="M41 31 L44 41 M59 31 L56 41" stroke="#3A3A3A" strokeWidth="2.4" strokeLinecap="round" />
-    <path d="M21 50 L31 52 M79 50 L69 52" stroke="#3A3A3A" strokeWidth="2.4" strokeLinecap="round" />
-    <circle cx="40" cy="51" r="7.5" fill="#fff" stroke="#3A3A3A" strokeWidth="1" /><circle cx="60" cy="51" r="7.5" fill="#fff" stroke="#3A3A3A" strokeWidth="1" />
-    <circle cx="40" cy="52" r="3.6" fill="#222" /><circle cx="60" cy="52" r="3.6" fill="#222" />
-    <circle cx="41.4" cy="50.6" r="1.3" fill="#fff" /><circle cx="61.4" cy="50.6" r="1.3" fill="#fff" />
-    <path d="M46 61 L54 61 L50 66 Z" fill="#E07A9A" />
-    <path d="M50 66 Q45 71 41 67 M50 66 Q55 71 59 67" stroke="#A99B82" strokeWidth="2" fill="none" strokeLinecap="round" />
-    <path d="M30 61 L14 58 M30 65 L15 67" stroke="#CFC8B6" strokeWidth="1.8" strokeLinecap="round" />
-    <path d="M70 61 L86 58 M70 65 L85 67" stroke="#CFC8B6" strokeWidth="1.8" strokeLinecap="round" />
+    <defs><linearGradient id="cnG" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stopColor="#FBEFB0" /><stop offset="0.5" stopColor="#DCBB4E" /><stop offset="1" stopColor="#8A6A1E" /></linearGradient></defs>
+    <g stroke="#3F2F0A" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M32 24 C76 18 80 52 44 58 C14 63 22 86 62 88" fill="none" stroke="#3F2F0A" strokeWidth="15" />
+      <path d="M32 24 C76 18 80 52 44 58 C14 63 22 86 62 88" fill="none" stroke="url(#cnG)" strokeWidth="12" />
+      <path d="M42 15 l5 -10 4 10 z M54 16 l5 -10 4 10 z M64 23 l6 -8 2 9 z M71 35 l8 -4 -2 8 z" fill="url(#cnG)" />
+      <path d="M46 56 q9 3 8 14 q-2 -8 -10 -10 z" fill="url(#cnG)" />
+      <path d="M30 10 q-16 2 -16 18 q0 12 14 13 q12 1 16 -8 q3 -10 -5 -16 q-5 -5 -9 -7 z" fill="url(#cnG)" />
+      <path d="M19 3 q-3 -6 1 -8 q1 7 6 9 z M34 4 q4 -7 8 -7 q-4 6 -3 11 z" fill="url(#cnG)" />
+      <path d="M12 27 q-8 1 -10 6 q6 -1 10 2 z" fill="url(#cnG)" />
+      <path d="M8 22 q-7 -2 -8 -8 M6 31 q-6 3 -6 10" fill="none" stroke="url(#cnG)" strokeWidth="2" />
+      <circle cx="26" cy="22" r="2.7" fill="#2A1E06" />
+      <path d="M62 88 q10 0 12 -7 q0 8 -12 7 z" fill="url(#cnG)" />
+    </g>
   </svg>
 );
-const Jujak = ({ size = 64 }) => ( // 주작 (남)
+const Baekho = ({ size = 66 }) => ( // 백호 (서)
   <svg width={size} height={size} viewBox="0 0 100 100">
-    <path d="M50 5 Q43 20 50 27 Q57 20 50 5 Z" fill="#F7C948" />
-    <path d="M35 11 Q33 24 45 27 Q42 16 35 11 Z" fill="#F5A623" />
-    <path d="M65 11 Q67 24 55 27 Q58 16 65 11 Z" fill="#F5A623" />
-    <path d="M21 55 Q3 49 8 71 Q19 66 27 64 Z" fill="#EC7063" />
-    <path d="M79 55 Q97 49 92 71 Q81 66 73 64 Z" fill="#EC7063" />
-    <ellipse cx="50" cy="56" rx="28" ry="27" fill="#E74C3C" />
-    <ellipse cx="50" cy="64" rx="17" ry="13" fill="#F8BDB4" />
-    <circle cx="41" cy="50" r="7.5" fill="#fff" /><circle cx="59" cy="50" r="7.5" fill="#fff" />
-    <circle cx="42" cy="51" r="3.6" fill="#5A1A12" /><circle cx="60" cy="51" r="3.6" fill="#5A1A12" />
-    <circle cx="43.3" cy="49.6" r="1.3" fill="#fff" /><circle cx="61.3" cy="49.6" r="1.3" fill="#fff" />
-    <path d="M44 60 L56 60 L50 70 Z" fill="#F39C12" />
-    <path d="M44 60 L56 60" stroke="#C97A0A" strokeWidth="1.4" />
+    <defs><linearGradient id="bhG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#F6F8FA" /><stop offset="0.55" stopColor="#C6CCD2" /><stop offset="1" stopColor="#868D95" /></linearGradient></defs>
+    <g stroke="#3a3f45" strokeWidth="1.1" strokeLinejoin="round">
+      <path d="M24 34 L19 13 L41 26 Z" fill="url(#bhG)" /><path d="M76 34 L81 13 L59 26 Z" fill="url(#bhG)" />
+      <path d="M50 22 C77 22 85 42 81 60 C77 80 62 87 50 87 C38 87 23 80 19 60 C15 42 23 22 50 22 Z" fill="url(#bhG)" />
+      <path d="M19 60 l-11 4 10 3 z M81 60 l11 4 -10 3 z" fill="url(#bhG)" />
+      <g stroke="#2b2f34" strokeWidth="3" strokeLinecap="round" fill="none">
+        <path d="M50 24 L50 37" /><path d="M40 28 L43 41" /><path d="M60 28 L57 41" />
+        <path d="M25 46 L36 50" /><path d="M75 46 L64 50" /><path d="M23 63 L34 62" /><path d="M77 63 L66 62" />
+      </g>
+      <path d="M33 50 l13 2 -2 6 -11 -2 z" fill="#1f2327" /><path d="M67 50 l-13 2 2 6 11 -2 z" fill="#1f2327" />
+      <circle cx="40" cy="52" r="1.7" fill="#F4D03F" /><circle cx="60" cy="52" r="1.7" fill="#F4D03F" />
+      <path d="M45 63 L55 63 L50 69 Z" fill="#3a3f45" />
+      <path d="M44 71 l3 6 3 -5 3 5 3 -6" fill="none" stroke="#2b2f34" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M47 71 l-1 7 M53 71 l1 7" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
+    </g>
   </svg>
 );
-const Hyeonmu = ({ size = 64 }) => ( // 현무 (북)
+const Jujak = ({ size = 66 }) => ( // 주작 (남)
   <svg width={size} height={size} viewBox="0 0 100 100">
-    <path d="M70 30 Q93 41 84 63 Q80 75 65 74" stroke="#86C2A2" strokeWidth="7" fill="none" strokeLinecap="round" />
-    <circle cx="71" cy="28" r="7" fill="#5FA77E" />
-    <circle cx="69" cy="27" r="1.7" fill="#173B2A" />
-    <path d="M71 21 L71 15 M69 16 L73 16" stroke="#C0392B" strokeWidth="1.7" strokeLinecap="round" />
-    <ellipse cx="45" cy="57" rx="30" ry="26" fill="#2F6B4F" />
-    <ellipse cx="45" cy="57" rx="22" ry="18" fill="#3E8763" />
-    <path d="M45 39 L45 75 M27 51 L63 51 M29 65 L61 65" stroke="#214E39" strokeWidth="2" fill="none" strokeLinecap="round" />
-    <circle cx="22" cy="71" r="5" fill="#6BB590" /><circle cx="68" cy="72" r="5" fill="#6BB590" />
-    <circle cx="45" cy="28" r="12" fill="#6BB590" />
-    <circle cx="41" cy="27" r="2.4" fill="#173B2A" /><circle cx="50" cy="27" r="2.4" fill="#173B2A" />
-    <circle cx="41.8" cy="26.2" r="0.9" fill="#fff" /><circle cx="50.8" cy="26.2" r="0.9" fill="#fff" />
-    <path d="M41 33 Q45 36 49 33" stroke="#214E39" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+    <defs><linearGradient id="jjG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#F7D67E" /><stop offset="0.5" stopColor="#DC8C2C" /><stop offset="1" stopColor="#9C3B1A" /></linearGradient></defs>
+    <g stroke="#5A1E0A" strokeWidth="1.1" strokeLinejoin="round" fill="url(#jjG)">
+      <path d="M48 52 C30 36 9 38 5 53 C20 50 31 55 45 61 Z" />
+      <path d="M52 52 C70 36 91 38 95 53 C80 50 69 55 55 61 Z" />
+      <path d="M48 58 C33 52 15 56 13 68 C26 63 37 65 46 67 Z" />
+      <path d="M52 58 C67 52 85 56 87 68 C74 63 63 65 54 67 Z" />
+      <path d="M50 40 C59 45 59 72 50 86 C41 72 41 45 50 40 Z" />
+      <circle cx="50" cy="33" r="9" />
+      <path d="M50 24 q-3 -11 2 -15 q1 9 5 12 z M44 26 q-7 -8 -5 -14 q5 7 9 10 z M56 26 q7 -8 5 -14 q-5 7 -9 10 z" />
+      <path d="M50 40 l-5 7 5 2 5 -2 z" fill="#7A2A10" />
+      <path d="M50 84 l-9 15 9 -5 9 5 z" />
+      <circle cx="50" cy="32" r="2.1" fill="#3A150A" />
+    </g>
+  </svg>
+);
+const Hyeonmu = ({ size = 66 }) => ( // 현무 (북)
+  <svg width={size} height={size} viewBox="0 0 100 100">
+    <defs>
+      <linearGradient id="hmS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#A6BA72" /><stop offset="0.5" stopColor="#5E7A3E" /><stop offset="1" stopColor="#31461E" /></linearGradient>
+      <linearGradient id="hmK" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#CDB463" /><stop offset="1" stopColor="#7A5E22" /></linearGradient>
+    </defs>
+    <g stroke="#23301a" strokeWidth="1.1" strokeLinejoin="round">
+      <path d="M68 76 C92 68 90 34 70 28 C58 24 56 14 64 9" fill="none" stroke="url(#hmK)" strokeWidth="7" strokeLinecap="round" />
+      <path d="M64 9 q-7 -1 -9 -7 q5 3 11 2 z" fill="url(#hmK)" />
+      <circle cx="61" cy="6" r="1.5" fill="#2A1E06" />
+      <ellipse cx="22" cy="69" rx="8" ry="5.5" fill="url(#hmS)" /><ellipse cx="52" cy="83" rx="8" ry="5.5" fill="url(#hmS)" />
+      <path d="M14 56 C14 34 62 34 62 56 C62 74 14 74 14 56 Z" fill="url(#hmK)" />
+      <path d="M21 56 C21 41 55 41 55 56 C55 68 21 68 21 56 Z" fill="url(#hmS)" />
+      <g stroke="#2c3d1c" strokeWidth="1.7" fill="none"><path d="M38 42 L38 70 M22 56 L54 56 M26 64 L50 64 M26 48 L50 48" /></g>
+      <circle cx="13" cy="50" r="9.5" fill="url(#hmS)" />
+      <circle cx="9.5" cy="49" r="1.7" fill="#1f2a14" />
+    </g>
   </svg>
 );
 const GUARDIANS = [
-  { C: Cheongnyong, name: "청룡", dir: "동쪽", color: "#1E88C7" },
-  { C: Baekho, name: "백호", dir: "서쪽", color: "#7C8794" },
-  { C: Jujak, name: "주작", dir: "남쪽", color: "#E74C3C" },
-  { C: Hyeonmu, name: "현무", dir: "북쪽", color: "#2F6B4F" },
+  { C: Cheongnyong, name: "청룡", dir: "동쪽" },
+  { C: Baekho, name: "백호", dir: "서쪽" },
+  { C: Jujak, name: "주작", dir: "남쪽" },
+  { C: Hyeonmu, name: "현무", dir: "북쪽" },
 ];
 
 function Home({ student, totalStars, masteredCount, onStart, onHall, onRecords, onTeacher, onChangeUser }) {
   return (
     <div style={{ paddingBottom: 40 }}>
-      <header style={{ paddingTop: 18 }}>
-        <div style={{ borderRadius: 28, padding: "18px 14px 16px", textAlign: "center", background: "linear-gradient(160deg,#FBF3DC 0%,#F2E6F3 48%,#E7F1FB 100%)", border: "2px solid #EADFC9", boxShadow: "0 10px 0 rgba(0,0,0,.05)" }}>
-          <div style={{ fontFamily: BRUSH, fontSize: 14, letterSpacing: 6, color: "#A8895A" }}>四 神</div>
-          <h1 style={{ fontFamily: BRUSH, fontSize: 42, margin: "0 0 1px", color: "#4A3B28", letterSpacing: 3 }}>한자 수호대</h1>
-          <p style={{ color: "#8A7A60", fontSize: 12.5, margin: "2px 0 14px" }}>네 수호신과 함께 한자 192자를 지켜라!</p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9 }}>
-            {GUARDIANS.map((g) => (
-              <div key={g.name} style={{ background: "#fff", borderRadius: 18, padding: "10px 6px 8px", border: `2px solid ${g.color}33`, boxShadow: "0 3px 0 rgba(0,0,0,.04)" }}>
-                <g.C size={62} />
-                <div style={{ fontFamily: DISPLAY, fontSize: 16, color: g.color, marginTop: 1 }}>{g.name}</div>
-                <div style={{ fontSize: 10.5, color: "#A99B82" }}>{g.dir} 수호</div>
-              </div>
-            ))}
+      <header style={{ paddingTop: 16 }}>
+        <div style={{ position: "relative", borderRadius: 24, padding: "18px 16px 16px", textAlign: "center", overflow: "hidden", background: "radial-gradient(120% 85% at 50% 0%, #4a4036 0%, #2a241d 55%, #16120e 100%)", border: "3px solid #9C7B2E", boxShadow: "0 12px 0 rgba(0,0,0,.18)" }}>
+          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(60% 42% at 50% 22%, rgba(255,228,150,.12), transparent 70%)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", inset: 4, border: "1px solid rgba(201,162,74,.55)", borderRadius: 20, pointerEvents: "none" }} />
+          <div style={{ position: "relative" }}>
+            <Crest />
+            <h1 style={{ fontFamily: BRUSH, fontSize: 44, margin: "2px 0 0", letterSpacing: 3, background: "linear-gradient(180deg,#F9EBA8,#DBBA4C 55%,#9A7320)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", color: "#E6C84F", textShadow: "0 2px 1px rgba(0,0,0,.4)" }}>한자 수호대</h1>
+            <p style={{ color: "#D8C79A", fontSize: 12.5, margin: "4px 0 15px" }}>네 수호신과 함께 한자 192자를 지켜라!</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {GUARDIANS.map((g) => (
+                <div key={g.name} style={{ position: "relative", borderRadius: 14, padding: "8px 6px 9px", background: "radial-gradient(62% 56% at 50% 42%, rgba(220,187,78,.20), transparent 72%), linear-gradient(150deg,#3b342b,#1c1813)", border: "2px solid #8A6A22", boxShadow: "inset 0 0 0 1px rgba(201,162,74,.45)" }}>
+                  <g.C size={76} />
+                  <div style={{ fontFamily: DISPLAY, fontSize: 16, color: "#F0D98C", marginTop: 2, textShadow: "0 1px 0 rgba(0,0,0,.45)" }}>{g.name}</div>
+                  <div style={{ fontSize: 10.5, color: "#B9A36E" }}>{g.dir} 수호</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </header>
