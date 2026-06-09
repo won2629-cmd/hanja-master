@@ -1,19 +1,9 @@
 <!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>한자마스터</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<html lang="ko"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>한자마스터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&family=Song+Myung&display=swap" rel="stylesheet">
-<style>
-  html, body { margin: 0; background: #FBF7EF; }
-  * { -webkit-tap-highlight-color: transparent; }
-  #loading { font-family: 'Gowun Dodum', sans-serif; color: #9A8A72; text-align: center; padding: 70px 20px; font-size: 15px; }
-</style>
-</head>
-<body>
+<style>html,body{margin:0;background:#FBF7EF;}*{-webkit-tap-highlight-color:transparent;}#loading{font-family:'Gowun Dodum',sans-serif;color:#9A8A72;text-align:center;padding:70px 20px;font-size:15px;}</style>
+</head><body>
 <div id="root"><div id="loading">한자마스터를 불러오는 중...</div></div>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-database-compat.js"></script>
@@ -22,7 +12,6 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script type="text/babel" data-presets="react">
 const { useState, useMemo, useEffect } = React;
-
 const _icon = (paths) => ({ size = 24, color = "currentColor", fill = "none", stroke, strokeWidth = 2, ...p }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={stroke || color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" {...p}>{paths}</svg>
 );
@@ -1787,6 +1776,7 @@ function HanjaMaster() {
   const [giftsGiven, setGiftsGiven] = useState({}); // 학생 -> [구간0,1,2,3 받음 여부]
   const [gift, setGift] = useState(null); // {band} | null
   const [giftLog, setGiftLog] = useState([]); // 교사 명단: {id, student, si, band, ts, given}
+  const [lastSeen, setLastSeen] = useState({}); // 이름 -> 마지막 접속 시각(ts)
 
   // Firebase 실시간 동기화 (연결 안 되면 이 기기 메모리로만 동작)
   useEffect(() => {
@@ -1794,9 +1784,9 @@ function HanjaMaster() {
     const sref = _db.ref("students");
     const gref = _db.ref("giftLog");
     const hs = sref.on("value", (snap) => {
-      const v = snap.val() || {}; const profs = {}, pws = {}, gifts = {};
-      Object.values(v).forEach((s) => { if (!s || !s.name) return; profs[s.name] = s.progress || {}; pws[s.name] = s.pin; gifts[s.name] = s.gifts || [false, false, false, false]; });
-      setProfiles(profs); setPasswords(pws); setGiftsGiven(gifts);
+      const v = snap.val() || {}; const profs = {}, pws = {}, gifts = {}, ls = {};
+      Object.values(v).forEach((s) => { if (!s || !s.name) return; profs[s.name] = s.progress || {}; pws[s.name] = s.pin; gifts[s.name] = s.gifts || [false, false, false, false]; ls[s.name] = s.lastSeen || 0; });
+      setProfiles(profs); setPasswords(pws); setGiftsGiven(gifts); setLastSeen(ls);
     });
     const hg = gref.on("value", (snap) => {
       const v = snap.val() || {};
@@ -1807,6 +1797,15 @@ function HanjaMaster() {
     return () => { sref.off("value", hs); gref.off("value", hg); cref.off("value", hc); };
   }, []);
 
+  // 마지막 접속 시각: 로그인한 학생이 켜 있는 동안 주기적으로 기록 (가정 사용 시점 파악용)
+  useEffect(() => {
+    if (!student) return;
+    const stamp = () => { if (_db) _db.ref("students/" + fbKey(student) + "/lastSeen").set(Date.now()).catch(() => {}); else setLastSeen((m) => ({ ...m, [student]: Date.now() })); };
+    stamp();
+    const t = setInterval(stamp, 60000);
+    return () => clearInterval(t);
+  }, [student]);
+
   const progress = (student && profiles[student]) || {};
   const totalStars = Object.values(progress).reduce((s, p) => s + (p.stars || 0), 0);
   const masteredCount = Object.values(progress).filter((p) => p.mastered).length;
@@ -1815,12 +1814,14 @@ function HanjaMaster() {
     if (_db) {
       const ref = _db.ref("students/" + fbKey(name));
       ref.once("value").then((snap) => {
-        if (!snap.exists()) ref.set({ name, pin: pw, progress: {}, gifts: [false, false, false, false] });
+        if (!snap.exists()) ref.set({ name, pin: pw, progress: {}, gifts: [false, false, false, false], lastSeen: Date.now() });
+        else ref.update({ lastSeen: Date.now() });
       }).catch(() => {});
     } else {
       setProfiles((p) => (p[name] ? p : { ...p, [name]: {} }));
       setPasswords((g) => (g[name] !== undefined ? g : { ...g, [name]: pw }));
       setGiftsGiven((g) => (g[name] ? g : { ...g, [name]: [false, false, false, false] }));
+      setLastSeen((m) => ({ ...m, [name]: Date.now() }));
     }
     setStudent(name); setScreen(afterLogin);
   };
@@ -1833,10 +1834,13 @@ function HanjaMaster() {
   };
 
   const finishChar = (ch, stars) => {
-    const prev = (profiles[student] && profiles[student][ch] && profiles[student][ch].stars) || 0;
-    const newStars = Math.max(stars, prev);
-    if (_db) _db.ref("students/" + fbKey(student) + "/progress/" + ch).set({ mastered: true, stars: newStars }).catch(() => {});
-    else setProfiles((p) => { const cur = p[student] || {}; return { ...p, [student]: { ...cur, [ch]: { mastered: true, stars: newStars } } }; });
+    const prev = profiles[student] && profiles[student][ch];
+    const newStars = Math.max(stars, (prev && prev.stars) || 0);
+    const t = prev && prev.mastered ? prev.t : Date.now(); // 처음 마스터한 시각 유지
+    const rec = { mastered: true, stars: newStars };
+    if (t) rec.t = t;
+    if (_db) _db.ref("students/" + fbKey(student) + "/progress/" + ch).set(rec).catch(() => {});
+    else setProfiles((p) => { const cur = p[student] || {}; return { ...p, [student]: { ...cur, [ch]: rec } }; });
     setScreen("map");
     // 깜짝 복(福) 한자: 같은 구간에서 아직 안 받았다면 무작위 타이밍으로 등장
     const band = bandOf(si);
@@ -1882,7 +1886,7 @@ function HanjaMaster() {
           onBack={() => setScreen("map")} onFinish={finishChar} />}
         {screen === "collection" && <Collection progress={progress} totalStars={totalStars} onBack={() => setScreen("home")} />}
         {screen === "teacherAuth" && <TeacherGate onOk={() => setScreen("teacher")} onBack={() => setScreen("home")} />}
-        {screen === "teacher" && <TeacherDashboard profiles={profiles} log={giftLog} onToggle={toggleGiven} unlockAll={unlockAll} onToggleLock={() => setUnlock(!unlockAll)} onBack={() => setScreen("home")} />}
+        {screen === "teacher" && <TeacherDashboard profiles={profiles} log={giftLog} onToggle={toggleGiven} lastSeen={lastSeen} unlockAll={unlockAll} onToggleLock={() => setUnlock(!unlockAll)} onBack={() => setScreen("home")} />}
       </div>
       {gift && <GiftPopup message={GIFT_MESSAGES[gift.band]} onClose={() => setGift(null)} />}
     </div>
@@ -1927,20 +1931,33 @@ function TeacherGate({ onOk, onBack }) {
   );
 }
 
-function TeacherDashboard({ profiles, log, onToggle, unlockAll, onToggleLock, onBack }) {
+function TeacherDashboard({ profiles, log, onToggle, lastSeen = {}, unlockAll, onToggleLock, onBack }) {
   const [tab, setTab] = useState("students"); // "students" | "gifts"
   const pending = log.filter((e) => !e.given).length;
   const fmt = (ts) => { const d = new Date(ts); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`; };
+  const isToday = (ts) => { if (!ts) return false; const d = new Date(ts), n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate(); };
+  const fmtSeen = (ts) => {
+    if (!ts) return "접속 기록 없음";
+    const d = new Date(ts), now = new Date();
+    const hm = `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const day0 = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diff = Math.round((day0(now) - day0(d)) / 86400000);
+    if (diff === 0) return `오늘 ${hm}`;
+    if (diff === 1) return `어제 ${hm}`;
+    if (diff < 7) return `${diff}일 전 ${hm}`;
+    return `${d.getMonth() + 1}월 ${d.getDate()}일 ${hm}`;
+  };
 
   const students = Object.entries(profiles).map(([name, prog]) => {
     const mastered = Object.values(prog).filter((p) => p.mastered).length;
     const stars = Object.values(prog).reduce((s, p) => s + (p.stars || 0), 0);
+    const todayN = Object.values(prog).filter((p) => p.mastered && isToday(p.t)).length;
     const grades = CURRICULUM.map((st) => {
       const done = st.chars.filter((c) => prog[c.char]?.mastered).length;
       return { done, total: st.chars.length };
     });
     const curGrade = (() => { for (let i = grades.length - 1; i >= 0; i--) if (grades[i].done > 0) return i; return -1; })();
-    return { name, mastered, stars, grades, curGrade, isMaster: mastered >= ALL_CHARS.length };
+    return { name, mastered, stars, grades, curGrade, isMaster: mastered >= ALL_CHARS.length, seen: lastSeen[name] || 0, todayN };
   }).sort((a, b) => b.mastered - a.mastered || b.stars - a.stars);
 
   const TabBtn = ({ id, children }) => (
@@ -1980,6 +1997,7 @@ function TeacherDashboard({ profiles, log, onToggle, unlockAll, onToggleLock, on
               <div key={s.name} style={{ background: "#fff", border: `2px solid ${s.isMaster ? "#C9A227" : "#EADFC9"}`, borderRadius: 16, padding: "12px 14px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ flex: 1, fontFamily: DISPLAY, fontSize: 17 }}>🥋 {s.name} {s.isMaster && <span>👑</span>}</div>
+                  {s.todayN > 0 && <span style={{ fontSize: 11.5, fontFamily: DISPLAY, color: "#1C6E37", background: "#E8F6EC", border: "1.5px solid #2E9E4F", borderRadius: 99, padding: "2px 8px" }}>오늘 +{s.todayN}</span>}
                   <span style={{ fontSize: 12.5, color: "#9A8A72" }}>⭐ {s.stars}</span>
                   <span style={{ fontSize: 12.5, color: "#5A4A33", fontFamily: DISPLAY }}><Trophy size={12} /> {s.mastered}/{ALL_CHARS.length}</span>
                 </div>
@@ -1995,8 +2013,9 @@ function TeacherDashboard({ profiles, log, onToggle, unlockAll, onToggleLock, on
                     );
                   })}
                 </div>
-                <div style={{ fontSize: 11, color: "#9A8A72", marginTop: 6 }}>
-                  {s.curGrade < 0 ? "아직 시작 전" : `현재 ${BELTS[s.curGrade].grade} ${BELTS[s.curGrade].belt} (${s.grades[s.curGrade].done}/${s.grades[s.curGrade].total})`}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "#9A8A72", marginTop: 6 }}>
+                  <span>{s.curGrade < 0 ? "아직 시작 전" : `현재 ${BELTS[s.curGrade].grade} ${BELTS[s.curGrade].belt} (${s.grades[s.curGrade].done}/${s.grades[s.curGrade].total})`}</span>
+                  <span style={{ color: "#A99B82" }}>🕒 {fmtSeen(s.seen)}</span>
                 </div>
               </div>
             ))}
@@ -2584,6 +2603,4 @@ function Collection({ progress, totalStars, onBack }) {
 
 ReactDOM.createRoot(document.getElementById('root')).render(<HanjaMaster />);
 
-</script>
-</body>
-</html>
+</script></body></html>
