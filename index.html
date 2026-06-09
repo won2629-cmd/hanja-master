@@ -1783,7 +1783,7 @@ function HanjaMaster() {
   const [afterLogin, setAfterLogin] = useState("stages"); // 로그인 후 이동할 화면
   const [si, setSi] = useState(0);
   const [ci, setCi] = useState(0);
-  const [unlockAll, setUnlockAll] = useState(true); // 교사 검토용: 단계 잠금 해제
+  const [unlockAll, setUnlockAll] = useState(false); // 단계 잠금: 기본은 순서 잠금(교사만 변경)
   const [giftsGiven, setGiftsGiven] = useState({}); // 학생 -> [구간0,1,2,3 받음 여부]
   const [gift, setGift] = useState(null); // {band} | null
   const [giftLog, setGiftLog] = useState([]); // 교사 명단: {id, student, si, band, ts, given}
@@ -1802,7 +1802,9 @@ function HanjaMaster() {
       const v = snap.val() || {};
       setGiftLog(Object.entries(v).map(([id, e]) => ({ id, ...e })).sort((a, b) => (b.ts || 0) - (a.ts || 0)));
     });
-    return () => { sref.off("value", hs); gref.off("value", hg); };
+    const cref = _db.ref("settings/unlockAll");
+    const hc = cref.on("value", (snap) => setUnlockAll(snap.val() === true));
+    return () => { sref.off("value", hs); gref.off("value", hg); cref.off("value", hc); };
   }, []);
 
   const progress = (student && profiles[student]) || {};
@@ -1824,6 +1826,7 @@ function HanjaMaster() {
   };
   const needLogin = (dest) => { if (student) setScreen(dest); else { setAfterLogin(dest); setScreen("login"); } };
   const changeUser = () => { setAfterLogin("home"); setScreen("login"); };
+  const setUnlock = (v) => { if (_db) _db.ref("settings/unlockAll").set(v).catch(() => {}); else setUnlockAll(v); };
   const toggleGiven = (id) => {
     if (_db) { const e = giftLog.find((x) => x.id === id); _db.ref("giftLog/" + id + "/given").set(e ? !e.given : true).catch(() => {}); }
     else setGiftLog((L) => L.map((e) => (e.id === id ? { ...e, given: !e.given } : e)));
@@ -1871,7 +1874,7 @@ function HanjaMaster() {
         {screen === "login" && <Login passwords={passwords} onLogin={login} onBack={() => setScreen("home")} />}
         {screen === "hall" && <HallOfFame profiles={profiles} onBack={() => setScreen("home")} />}
         {screen === "stages" && <StageSelect student={student} onBack={() => setScreen("home")} progress={progress} totalStars={totalStars} masteredCount={masteredCount}
-          unlockAll={unlockAll} onToggleLock={() => setUnlockAll((v) => !v)} onOpen={(i) => { setSi(i); setScreen("map"); }} />}
+          unlockAll={unlockAll} onOpen={(i) => { setSi(i); setScreen("map"); }} />}
         {screen === "map" && <MapScreen stage={CURRICULUM[si]} stageIndex={si} progress={progress}
           onBack={() => setScreen("stages")} onOpen={(i) => { setCi(i); setScreen("char"); }}
           onOpenStage={(i) => { setSi(i); setCi(0); }} />}
@@ -1879,7 +1882,7 @@ function HanjaMaster() {
           onBack={() => setScreen("map")} onFinish={finishChar} />}
         {screen === "collection" && <Collection progress={progress} totalStars={totalStars} onBack={() => setScreen("home")} />}
         {screen === "teacherAuth" && <TeacherGate onOk={() => setScreen("teacher")} onBack={() => setScreen("home")} />}
-        {screen === "teacher" && <TeacherDashboard profiles={profiles} log={giftLog} onToggle={toggleGiven} onBack={() => setScreen("home")} />}
+        {screen === "teacher" && <TeacherDashboard profiles={profiles} log={giftLog} onToggle={toggleGiven} unlockAll={unlockAll} onToggleLock={() => setUnlock(!unlockAll)} onBack={() => setScreen("home")} />}
       </div>
       {gift && <GiftPopup message={GIFT_MESSAGES[gift.band]} onClose={() => setGift(null)} />}
     </div>
@@ -1924,7 +1927,7 @@ function TeacherGate({ onOk, onBack }) {
   );
 }
 
-function TeacherDashboard({ profiles, log, onToggle, onBack }) {
+function TeacherDashboard({ profiles, log, onToggle, unlockAll, onToggleLock, onBack }) {
   const [tab, setTab] = useState("students"); // "students" | "gifts"
   const pending = log.filter((e) => !e.given).length;
   const fmt = (ts) => { const d = new Date(ts); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`; };
@@ -1950,12 +1953,22 @@ function TeacherDashboard({ profiles, log, onToggle, onBack }) {
         <button className="btn" onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", color: "#5A4A33" }}><ChevronLeft size={26} /></button>
         <div>
           <h2 style={{ fontFamily: DISPLAY, fontSize: 23, margin: 0 }}>교사용 대시보드</h2>
-          <div style={{ fontSize: 12, color: "#9A8A72" }}>이 기기·이번 세션 기준</div>
+          <div style={{ fontSize: 12, color: "#9A8A72" }}>{_db ? "모든 학생 · 실시간" : "이 기기·이번 세션 기준"}</div>
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
         <TabBtn id="students">👥 학생 현황 {students.length}</TabBtn>
         <TabBtn id="gifts">🎁 복 선물 {pending ? `· 대기 ${pending}` : log.length}</TabBtn>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, background: "#fff", border: "2px solid #EADFC9", borderRadius: 14, padding: "10px 14px" }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: DISPLAY, fontSize: 14.5 }}>단계 잠금</div>
+          <div style={{ fontSize: 11.5, color: "#9A8A72", marginTop: 2 }}>{unlockAll ? "모두 열림 — 학생이 아무 급이나 들어갈 수 있어요" : "순서 잠금 — 앞 급을 깨야 다음 급이 열려요"}</div>
+        </div>
+        <button className="btn" onClick={onToggleLock} style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5, fontFamily: DISPLAY, fontSize: 14, borderRadius: 12, padding: "9px 14px", border: `2px solid ${unlockAll ? "#2E9E4F" : "#C9A227"}`, color: unlockAll ? "#1C6E37" : "#8A6A12", background: unlockAll ? "#E8F6EC" : "#FBF3DC" }}>
+          <Lock size={15} /> {unlockAll ? "모두 열림" : "순서 잠금"}
+        </button>
       </div>
 
       {tab === "students" ? (
@@ -2171,7 +2184,7 @@ function Login({ passwords, onLogin, onBack }) {
 }
 
 /* ---------- STAGE SELECT ---------- */
-function StageSelect({ student, onBack, progress, totalStars, masteredCount, unlockAll, onToggleLock, onOpen }) {
+function StageSelect({ student, onBack, progress, totalStars, masteredCount, unlockAll, onOpen }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 14 }}>
@@ -2184,12 +2197,7 @@ function StageSelect({ student, onBack, progress, totalStars, masteredCount, unl
         <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 14, flexWrap: "wrap" }}>
           <Pill><Star size={15} fill="#E8A020" stroke="#E8A020" /> {totalStars}</Pill>
           <Pill><Trophy size={15} /> {masteredCount}/{ALL_CHARS.length}</Pill>
-          <button className="btn" onClick={onToggleLock} title="교사용: 단계 잠금 켜고 끄기"
-            style={{ ...pillStyle, cursor: "pointer", background: unlockAll ? "#E8F6EC" : "#fff", borderColor: unlockAll ? "#2E9E4F" : "#EADFC9", color: unlockAll ? "#1C6E37" : "#5A4A33" }}>
-            <Lock size={14} /> {unlockAll ? "모두 열림" : "순서 잠금"}
-          </button>
         </div>
-        {unlockAll && <p style={{ fontSize: 11.5, color: "#9A8A72", marginTop: 8 }}>교사 검토 모드 · 학생에게 줄 때는 “순서 잠금”으로 바꾸세요</p>}
       </header>
       <div style={{ marginTop: 22, display: "flex", flexDirection: "column", gap: 11 }}>
         {CURRICULUM.map((st, i) => {
