@@ -1929,7 +1929,8 @@ const RAID_BOSSES = [
   { name: "무자대마신", han: "無字大魔神", hp: 1500, cap: 75, pool: [2, 3, 3, 3, 3], border: "#C9A24A" },
 ];
 const RAID_SLOT = 12;   // 출전 슬롯 상한 (한 번에 장전 가능한 카드 수)
-const RAID_DAILY = 10;  // 하루 도전 횟수
+const RAID_DAILY = 10;  // (참고) 예전 고정 한도
+const RAID_LUCKY_P = 0.12;  // 힘력 한자(복불복) 발생 확률
 const RAID_IMG = (i) => "raid-boss-" + (i + 1) + ".png";
 const raidToday = () => { const d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
 const raidStars = (n) => "★".repeat(n) + "☆".repeat(3 - n);
@@ -1957,6 +1958,8 @@ function HanjaRaid({ student, progress, onBack }) {
       .map((ch) => byChar[ch]).filter(Boolean)
       .map((c) => ({ char: c.char, meaning: c.meaning, pw: Math.min(3, Math.max(1, (progress[c.char].stars || 1))), words: c.words || [] }));
   }, [progress]);
+  const curGrade = useMemo(() => { let g = -1; CURRICULUM.forEach((st, i) => { if (st.chars.some((c) => progress[c.char] && progress[c.char].mastered)) g = i; }); return g; }, [progress]);
+  const dailyLimit = Math.max(0, curGrade + 1); // 수호대장 11 … 10급 1 (바닥값 없음)
 
   const [bi, setBi] = useState(0);
   const [seal, setSeal] = useState(0);
@@ -2039,21 +2042,23 @@ function HanjaRaid({ student, progress, onBack }) {
     setTimeout(() => { setQuiz(null); q.onResult(ok); }, ok ? 130 : 540);
   };
 
-  const startAttack = (card) => {
+  const startAttack = (card, boon) => {
     const correct = card.meaning;
     const others = sample(deck.filter((c) => c.char !== card.char), 2).map((c) => c.meaning);
-    runQuiz({ kind: "attack", head: card.char, qtext: "⚔ 3초 안에! <b>" + card.char + "</b>의 뜻과 음을 맞혀요", options: shuffle([correct, ...others]), correct, timed: true, limit: 3000, onResult: (ok) => (ok ? doAttack(card) : attackFail(card)) });
+    const prefix = boon === "win" ? "✨ 힘력 한자! 맞히면 무조건 승리 — " : boon === "again" ? "✨ 힘력 한자! 이번 도전은 공짜 — " : "⚔ 3초 안에! ";
+    runQuiz({ kind: "attack", head: card.char, qtext: prefix + "<b>" + card.char + "</b>의 뜻과 음을 맞혀요", options: shuffle([correct, ...others]), correct, timed: true, limit: 3000, onResult: (ok) => (ok ? doAttack(card, boon) : attackFail(card)) });
   };
-  const doAttack = (card) => {
+  const doAttack = (card, boon) => {
     setBusy(true);
     const b = RAID_BOSSES[bi];
     const nc = { ...charged }; delete nc[card.char]; setCharged(nc); saveMyRaid({ charged: nc });
     const maPw = b.pool[(Math.random() * b.pool.length) | 0];
     setClash("🥋  ⚡  👹"); setMsg("…");
     setTimeout(() => {
-      const win = card.pw >= maPw;
-      if (win) { bumpSeal(); setClash("✦ 승리! ✦"); setMsg("✦ " + card.char + " 승리! 봉인 +1 (마왕 힘 " + maPw + "). " + card.char + "는 «대기»로 빠졌어요."); }
-      else { setClash("… 패배 …"); setMsg(card.char + " 패배 (마왕 힘 " + maPw + "). 봉인 +0, «대기»로. 수련해 다시 장전해요."); }
+      const win = (boon === "win") || (card.pw >= maPw);
+      const free = (boon === "again") ? " ✨ 힘력 한자 — 이번 도전은 공짜!" : "";
+      if (win) { bumpSeal(); setClash(boon === "win" ? "✨ 힘력 승리! ✨" : "✦ 승리! ✦"); setMsg((boon === "win" ? "✨ 힘력 한자! " : "") + card.char + " 승리! 봉인 +1 (마왕 힘 " + maPw + "). " + card.char + "는 «대기»로 빠졌어요." + free); }
+      else { setClash("… 패배 …"); setMsg(card.char + " 패배 (마왕 힘 " + maPw + "). 봉인 +0, «대기»로. 수련해 다시 장전해요." + free); }
       setSel(null); setBusy(false);
     }, 720);
   };
@@ -2062,9 +2067,10 @@ function HanjaRaid({ student, progress, onBack }) {
   const onChallenge = () => {
     if (sel == null || busy || !charged[sel] || allSealed) return;
     if (myContrib >= boss.cap) { setMsg("이 마왕엔 더 기여할 수 없어요 (상한 " + boss.cap + ") — 친구들 차례!"); return; }
-    if (todayN >= RAID_DAILY) { setMsg("오늘 도전을 다 썼어요 (" + RAID_DAILY + "회). 내일 다시 만나요!"); return; }
-    const t = raidToday(); const nN = (dDate === t ? dN : 0) + 1; setDDate(t); setDN(nN); saveMyRaid({ dDate: t, dN: nN });
-    const card = deck.find((c) => c.char === sel); startAttack(card);
+    if (todayN >= dailyLimit) { setMsg("오늘 도전을 다 썼어요 (" + dailyLimit + "회). 내일 다시 만나요!"); return; }
+    const boon = (Math.random() < RAID_LUCKY_P) ? (Math.random() < 0.5 ? "win" : "again") : null;
+    if (boon !== "again") { const t = raidToday(); const nN = (dDate === t ? dN : 0) + 1; setDDate(t); setDN(nN); saveMyRaid({ dDate: t, dN: nN }); }
+    const card = deck.find((c) => c.char === sel); startAttack(card, boon);
   };
 
   const armCard = (card) => { if (chargedCount() >= RAID_SLOT) return; const nc = { ...charged, [card.char]: true }; setCharged(nc); saveMyRaid({ charged: nc }); };
@@ -2126,7 +2132,7 @@ function HanjaRaid({ student, progress, onBack }) {
           </div>
 
           <div style={{ display: "flex", gap: 7, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
-            <span style={chip}>오늘 도전 <b style={{ color: "#F4D03F" }}>{RAID_DAILY - todayN}</b>/{RAID_DAILY}</span>
+            <span style={chip}>오늘 도전 <b style={{ color: "#F4D03F" }}>{Math.max(0, dailyLimit - todayN)}</b>/{dailyLimit}</span>
             <span style={chip}>출전 <b style={{ color: "#F4D03F" }}>{chargedCount()}</b>/{RAID_SLOT}</span>
             <span style={chip}>내 기여 <b style={{ color: "#F4D03F" }}>{myContrib}</b>/{boss.cap}</span>
           </div>
@@ -2149,7 +2155,7 @@ function HanjaRaid({ student, progress, onBack }) {
             <div style={{ textAlign: "center", fontSize: 13.5, marginTop: 6, lineHeight: 1.6, minHeight: 20, color: "#F0E6CE" }}>{allSealed ? "🏆 모든 마왕을 봉인했어요! 한자 수호대가 글자 세상을 지켜냈습니다." : msg}</div>
           </div>
 
-          <button onClick={onChallenge} disabled={busy || allSealed || sel == null || !charged[sel] || todayN >= RAID_DAILY || myContrib >= boss.cap} style={{ display: "block", width: "100%", marginTop: 10, fontFamily: DISPLAY, fontSize: 16, fontWeight: "bold", cursor: "pointer", border: "none", borderRadius: 14, padding: 13, color: "#1a120a", background: (busy || allSealed || sel == null || !charged[sel] || todayN >= RAID_DAILY || myContrib >= boss.cap) ? "#5a4d2c" : "linear-gradient(180deg,#F4D03F,#C9A24A)" }}>도전!</button>
+          <button onClick={onChallenge} disabled={busy || allSealed || sel == null || !charged[sel] || todayN >= dailyLimit || myContrib >= boss.cap} style={{ display: "block", width: "100%", marginTop: 10, fontFamily: DISPLAY, fontSize: 16, fontWeight: "bold", cursor: "pointer", border: "none", borderRadius: 14, padding: 13, color: "#1a120a", background: (busy || allSealed || sel == null || !charged[sel] || todayN >= dailyLimit || myContrib >= boss.cap) ? "#5a4d2c" : "linear-gradient(180deg,#F4D03F,#C9A24A)" }}>도전!</button>
 
           <div style={{ fontSize: 13, color: "#B9A36E", margin: "16px 0 4px", display: "flex", justifyContent: "space-between" }}>
             <span>📖 내 도감 <span style={{ color: "#7d6e4e", fontSize: 11 }}>({deck.length}자, 영구)</span></span>
