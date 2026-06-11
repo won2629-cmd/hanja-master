@@ -1773,6 +1773,7 @@ function HanjaMaster() {
   const [si, setSi] = useState(0);
   const [ci, setCi] = useState(0);
   const [unlockAll, setUnlockAll] = useState(false); // 단계 잠금: 기본은 순서 잠금(교사만 변경)
+  const [raidOn, setRaidOnState] = useState(false); // 봉인전 표시 (교사 토글)
   const [giftsGiven, setGiftsGiven] = useState({}); // 학생 -> [구간0,1,2,3 받음 여부]
   const [gift, setGift] = useState(null); // {band} | null
   const [giftLog, setGiftLog] = useState([]); // 교사 명단: {id, student, si, band, ts, given}
@@ -1794,7 +1795,9 @@ function HanjaMaster() {
     });
     const cref = _db.ref("settings/unlockAll");
     const hc = cref.on("value", (snap) => setUnlockAll(snap.val() === true));
-    return () => { sref.off("value", hs); gref.off("value", hg); cref.off("value", hc); };
+    const rref = _db.ref("settings/raidOn");
+    const hr = rref.on("value", (snap) => setRaidOnState(snap.val() === true));
+    return () => { sref.off("value", hs); gref.off("value", hg); cref.off("value", hc); rref.off("value", hr); };
   }, []);
 
   // 마지막 접속 시각: 로그인한 학생이 켜 있는 동안 주기적으로 기록 (가정 사용 시점 파악용)
@@ -1828,6 +1831,7 @@ function HanjaMaster() {
   const needLogin = (dest) => { if (student) setScreen(dest); else { setAfterLogin(dest); setScreen("login"); } };
   const changeUser = () => { setAfterLogin("home"); setScreen("login"); };
   const setUnlock = (v) => { if (_db) _db.ref("settings/unlockAll").set(v).catch(() => {}); else setUnlockAll(v); };
+  const setRaidOn = (v) => { if (_db) _db.ref("settings/raidOn").set(v).catch(() => {}); else setRaidOnState(v); };
   const toggleGiven = (id) => {
     if (_db) { const e = giftLog.find((x) => x.id === id); _db.ref("giftLog/" + id + "/given").set(e ? !e.given : true).catch(() => {}); }
     else setGiftLog((L) => L.map((e) => (e.id === id ? { ...e, given: !e.given } : e)));
@@ -1874,7 +1878,7 @@ function HanjaMaster() {
         {screen === "home" && <Home student={student} totalStars={totalStars} masteredCount={masteredCount}
           onStart={() => { setSi(0); needLogin("stages"); }}
           onHall={() => setScreen("hall")} onRecords={() => needLogin("collection")}
-          onTeacher={() => setScreen("teacherAuth")} onChangeUser={changeUser} />}
+          onTeacher={() => setScreen("teacherAuth")} onChangeUser={changeUser} onRaid={() => needLogin("raid")} raidOn={raidOn} />}
         {screen === "login" && <Login passwords={passwords} onLogin={login} onBack={() => setScreen("home")} />}
         {screen === "hall" && <HallOfFame profiles={profiles} onBack={() => setScreen("home")} />}
         {screen === "stages" && <StageSelect student={student} onBack={() => setScreen("home")} progress={progress} totalStars={totalStars} masteredCount={masteredCount}
@@ -1885,13 +1889,285 @@ function HanjaMaster() {
         {screen === "char" && <CharScreen key={CURRICULUM[si].chars[ci].char} stage={CURRICULUM[si]} ch={CURRICULUM[si].chars[ci]}
           onBack={() => setScreen("map")} onFinish={finishChar} />}
         {screen === "collection" && <Collection progress={progress} totalStars={totalStars} onBack={() => setScreen("home")} />}
+        {screen === "raid" && <HanjaRaid student={student} progress={progress} onBack={() => setScreen("home")} />}
         {screen === "teacherAuth" && <TeacherGate onOk={() => setScreen("teacher")} onBack={() => setScreen("home")} />}
-        {screen === "teacher" && <TeacherDashboard profiles={profiles} log={giftLog} onToggle={toggleGiven} lastSeen={lastSeen} unlockAll={unlockAll} onToggleLock={() => setUnlock(!unlockAll)} onBack={() => setScreen("home")} />}
+        {screen === "teacher" && <TeacherDashboard profiles={profiles} log={giftLog} onToggle={toggleGiven} lastSeen={lastSeen} unlockAll={unlockAll} onToggleLock={() => setUnlock(!unlockAll)} raidOn={raidOn} onToggleRaid={() => setRaidOn(!raidOn)} onBack={() => setScreen("home")} />}
       </div>
       {gift && <GiftPopup message={GIFT_MESSAGES[gift.band]} onClose={() => setGift(null)} />}
     </div>
   );
 }
+
+/* ============================ 한자 마왕 봉인전 (반 협동) ============================ */
+const RAID_BOSSES = [
+  { name: "먹그림자", han: "墨影", hp: 400, cap: 20, pool: [1, 1, 1, 2], border: "#4a6b80" },
+  { name: "혼돈귀", han: "混沌鬼", hp: 600, cap: 30, pool: [1, 1, 2, 2, 3], border: "#6a4a8a" },
+  { name: "망각대왕", han: "忘却大王", hp: 800, cap: 40, pool: [1, 2, 2, 3, 3], border: "#3a7a4a" },
+  { name: "흑필마왕", han: "黑筆魔王", hp: 1000, cap: 50, pool: [2, 2, 3, 3, 3], border: "#7a1f1a" },
+  { name: "무자대마신", han: "無字大魔神", hp: 1500, cap: 75, pool: [2, 3, 3, 3, 3], border: "#C9A24A" },
+];
+const RAID_SLOT = 12;   // 출전 슬롯 상한 (한 번에 장전 가능한 카드 수)
+const RAID_DAILY = 10;  // 하루 도전 횟수
+const RAID_IMG = (i) => "raid-boss-" + (i + 1) + ".png";
+const raidToday = () => { const d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
+const raidStars = (n) => "★".repeat(n) + "☆".repeat(3 - n);
+
+function IconOni({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24"><defs><linearGradient id="giOni" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#F7E29A" /><stop offset="1" stopColor="#B5892C" /></linearGradient></defs>
+      <path d="M7 6 C5 2 3 2 2.5 3 C4 3.5 4.5 5 5 7 Z" fill="url(#giOni)" />
+      <path d="M17 6 C19 2 21 2 21.5 3 C20 3.5 19.5 5 19 7 Z" fill="url(#giOni)" />
+      <path d="M12 4 C16 4 19 7 19 12 C19 17 16 20 12 20 C8 20 5 17 5 12 C5 7 8 4 12 4 Z" fill="url(#giOni)" stroke="#6E520F" strokeWidth="1" />
+      <path d="M8 10 L11 11 M16 10 L13 11" stroke="#6E520F" strokeWidth="1.4" strokeLinecap="round" />
+      <circle cx="9.5" cy="11.5" r="1.1" fill="#3a2a08" /><circle cx="14.5" cy="11.5" r="1.1" fill="#3a2a08" />
+      <path d="M9 15 Q12 18 15 15 Q13.5 16.7 12 16.7 Q10.5 16.7 9 15 Z" fill="#6E520F" />
+      <path d="M10 15.2 l-.5 2.2 1.4-.7z M14 15.2 l.5 2.2 -1.4-.7z" fill="#FFF6D8" />
+    </svg>
+  );
+}
+
+function HanjaRaid({ student, progress, onBack }) {
+  const key = fbKey(student);
+  const deck = useMemo(() => {
+    const byChar = {}; ALL_CHARS.forEach((c) => { byChar[c.char] = c; });
+    return Object.keys(progress || {})
+      .filter((ch) => progress[ch] && progress[ch].mastered)
+      .map((ch) => byChar[ch]).filter(Boolean)
+      .map((c) => ({ char: c.char, meaning: c.meaning, pw: Math.min(3, Math.max(1, (progress[c.char].stars || 1))), words: c.words || [] }));
+  }, [progress]);
+
+  const [bi, setBi] = useState(0);
+  const [seal, setSeal] = useState(0);
+  const [contrib, setContrib] = useState({});
+  const [charged, setCharged] = useState({});
+  const [dDate, setDDate] = useState(raidToday());
+  const [dN, setDN] = useState(0);
+  const [sel, setSel] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [quiz, setQuiz] = useState(null);
+  const [imgBroken, setImgBroken] = useState(false);
+  const [msg, setMsg] = useState("출전 카드를 골라 «도전!»을 누르세요");
+  const [clash, setClash] = useState("");
+  const timerRef = React.useRef(null);
+  const prevBi = React.useRef(0);
+  const loadedRef = React.useRef(false);
+  const initedRef = React.useRef(false);
+
+  const chargedCount = () => Object.keys(charged).length;
+  const saveMyRaid = (patch) => { if (_db) _db.ref("students/" + key + "/raid").update(patch).catch(() => {}); };
+
+  // 첫 장전 세트
+  const firstArm = () => { const o = {}; deck.slice(0, RAID_SLOT).forEach((c) => { o[c.char] = true; }); return o; };
+
+  useEffect(() => {
+    if (!_db) { setCharged(firstArm()); return; }
+    const sref = _db.ref("raid/seal");
+    const h1 = sref.on("value", (s) => { const v = s.val() || { bi: 0, n: 0 }; if (!loadedRef.current) { loadedRef.current = true; prevBi.current = v.bi || 0; } setBi(v.bi || 0); setSeal(v.n || 0); });
+    const cref = _db.ref("raid/contrib");
+    const h2 = cref.on("value", (s) => setContrib(s.val() || {}));
+    const mref = _db.ref("students/" + key + "/raid");
+    const h3 = mref.on("value", (s) => {
+      const v = s.val();
+      if (!v && !initedRef.current && deck.length) { initedRef.current = true; mref.set({ charged: firstArm(), dDate: raidToday(), dN: 0 }).catch(() => {}); return; }
+      if (!v) return;
+      setCharged(v.charged || {});
+      const t = raidToday();
+      setDDate(v.dDate || t);
+      setDN(v.dDate === t ? (v.dN || 0) : 0);
+    });
+    return () => { sref.off("value", h1); cref.off("value", h2); mref.off("value", h3); };
+  }, [key, deck.length]);
+
+  // 마왕이 봉인되어 다음 마왕으로 넘어가면 슬롯 재장전(보상)
+  useEffect(() => {
+    if (bi > prevBi.current) { const o = firstArm(); setCharged(o); saveMyRaid({ charged: o }); setMsg("🎉 마왕 봉인 성공! 슬롯이 다시 장전됐어요. 다음 마왕 등장!"); }
+    prevBi.current = bi; setImgBroken(false);
+  }, [bi]);
+
+  const myContrib = (contrib[bi] || {})[key] || 0;
+  const boss = RAID_BOSSES[Math.min(bi, RAID_BOSSES.length - 1)];
+  const allSealed = bi >= RAID_BOSSES.length - 1 && seal >= boss.hp;
+  const todayN = (dDate === raidToday() ? dN : 0);
+
+  const bumpSeal = () => {
+    if (_db) {
+      _db.ref("raid/seal").transaction((cur) => {
+        cur = cur || { bi: 0, n: 0 };
+        const hp = (RAID_BOSSES[cur.bi] || RAID_BOSSES[0]).hp;
+        if (cur.n + 1 >= hp) { return cur.bi + 1 <= RAID_BOSSES.length - 1 ? { bi: cur.bi + 1, n: 0 } : { bi: cur.bi, n: hp }; }
+        return { bi: cur.bi, n: cur.n + 1 };
+      }).catch(() => {});
+      _db.ref("raid/contrib/" + bi + "/" + key).transaction((n) => (n || 0) + 1).catch(() => {});
+    } else {
+      setContrib((c) => ({ ...c, [bi]: { ...(c[bi] || {}), [key]: ((c[bi] || {})[key] || 0) + 1 } }));
+      setSeal((s) => { const hp = RAID_BOSSES[bi].hp; if (s + 1 >= hp) { if (bi < RAID_BOSSES.length - 1) setBi((b) => b + 1); return s + 1 >= hp && bi < RAID_BOSSES.length - 1 ? 0 : hp; } return s + 1; });
+    }
+  };
+
+  const runQuiz = (q) => {
+    setQuiz({ ...q, locked: false, wrong: null });
+    clearTimeout(timerRef.current);
+    if (q.timed) timerRef.current = setTimeout(() => { setQuiz(null); q.onResult(false); }, q.limit);
+  };
+  const pick = (opt) => {
+    if (!quiz || quiz.locked) return;
+    const ok = opt === quiz.correct; const q = quiz;
+    clearTimeout(timerRef.current);
+    setQuiz({ ...quiz, locked: true, wrong: ok ? null : opt });
+    setTimeout(() => { setQuiz(null); q.onResult(ok); }, ok ? 130 : 540);
+  };
+
+  const startAttack = (card) => {
+    const correct = card.meaning;
+    const others = sample(deck.filter((c) => c.char !== card.char), 2).map((c) => c.meaning);
+    runQuiz({ kind: "attack", head: card.char, qtext: "⚔ 3초 안에! <b>" + card.char + "</b>의 뜻과 음을 맞혀요", options: shuffle([correct, ...others]), correct, timed: true, limit: 3000, onResult: (ok) => (ok ? doAttack(card) : attackFail(card)) });
+  };
+  const doAttack = (card) => {
+    setBusy(true);
+    const b = RAID_BOSSES[bi];
+    const nc = { ...charged }; delete nc[card.char]; setCharged(nc); saveMyRaid({ charged: nc });
+    const maPw = b.pool[(Math.random() * b.pool.length) | 0];
+    setClash("🥋  ⚡  👹"); setMsg("…");
+    setTimeout(() => {
+      const win = card.pw >= maPw;
+      if (win) { bumpSeal(); setClash("✦ 승리! ✦"); setMsg("✦ " + card.char + " 승리! 봉인 +1 (마왕 힘 " + maPw + "). " + card.char + "는 «대기»로 빠졌어요."); }
+      else { setClash("… 패배 …"); setMsg(card.char + " 패배 (마왕 힘 " + maPw + "). 봉인 +0, «대기»로. 수련해 다시 장전해요."); }
+      setSel(null); setBusy(false);
+    }, 720);
+  };
+  const attackFail = (card) => { setClash("✗ 공격 실패"); setMsg(card.char + " 음·뜻을 못 맞혔어요. 공격 실패(카드는 출전 그대로). 도전 기회만 1 줄었어요."); };
+
+  const onChallenge = () => {
+    if (sel == null || busy || !charged[sel] || allSealed) return;
+    if (myContrib >= boss.cap) { setMsg("이 마왕엔 더 기여할 수 없어요 (상한 " + boss.cap + ") — 친구들 차례!"); return; }
+    if (todayN >= RAID_DAILY) { setMsg("오늘 도전을 다 썼어요 (" + RAID_DAILY + "회). 내일 다시 만나요!"); return; }
+    const t = raidToday(); const nN = (dDate === t ? dN : 0) + 1; setDDate(t); setDN(nN); saveMyRaid({ dDate: t, dN: nN });
+    const card = deck.find((c) => c.char === sel); startAttack(card);
+  };
+
+  const armCard = (card) => { if (chargedCount() >= RAID_SLOT) return; const nc = { ...charged, [card.char]: true }; setCharged(nc); saveMyRaid({ charged: nc }); };
+  const startTrain = (card) => {
+    if (busy) return;
+    if (chargedCount() >= RAID_SLOT) { setMsg("출전 슬롯이 꽉 찼어요 (" + RAID_SLOT + "/" + RAID_SLOT + "). 먼저 공격해서 슬롯을 비우세요."); return; }
+    const correct = card.meaning;
+    const others = sample(deck.filter((c) => c.char !== card.char), 2).map((c) => c.meaning);
+    runQuiz({ kind: "t1", head: card.char, step: "수련 1/2 · 음과 뜻", qtext: "이 한자의 <b>뜻과 음</b>은?", options: shuffle([correct, ...others]), correct, timed: false, onResult: (ok) => (ok ? trainStep2(card) : trainFail(card)) });
+  };
+  const trainStep2 = (card) => {
+    const ws = card.words || [];
+    if (!ws.length) { armCard(card); setMsg("⚡ 수련 완료! " + card.char + " 카드가 «출전»으로 장전됐어요."); return; }
+    const w = ws[(Math.random() * ws.length) | 0];
+    const chObj = ALL_CHARS.find((c) => c.char === card.char) || { words: ws };
+    const correct = w.def; const others = distractDefs(chObj, correct, 2);
+    runQuiz({ kind: "t2", head: w.hanja || w.word, step: "수련 2/2 · 낱말 뜻", qtext: "낱말 「" + (w.hanja || w.word) + "」의 뜻은?", options: shuffle([correct, ...others]), correct, timed: false, onResult: (ok) => { if (ok) { armCard(card); setMsg("⚡ 수련 완료! " + card.char + " 카드가 «출전»으로 장전됐어요."); } else trainFail(card); } });
+  };
+  const trainFail = (card) => setMsg("수련 실패… " + card.char + "의 «수련»을 다시 눌러 도전해요.");
+
+  const sortedDeck = useMemo(() => [...deck].sort((a, b) => (charged[b.char] ? 1 : 0) - (charged[a.char] ? 1 : 0)), [deck, charged]);
+
+  const chip = { fontSize: 12, color: "#F0D98C", background: "linear-gradient(150deg,#2c2620,#15110d)", border: "1.5px solid #8A6A22", borderRadius: 99, padding: "6px 12px" };
+
+  return (
+    <div style={{ minHeight: "100vh", margin: "0 -16px", padding: "0 14px 30px", background: "radial-gradient(125% 80% at 50% -5%,#3a3228,#1b1611 50%,#0b0906)", color: "#F0E6CE" }}>
+      <style>{`
+        @keyframes hrshrink { from{width:100%} to{width:0} }
+        @keyframes hrshake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+        .hropt{display:block;width:100%;margin-top:8px;font-family:${FONT};font-size:15px;cursor:pointer;border:1.5px solid #6b551f;background:#2a2016;color:#F0E6CE;border-radius:12px;padding:11px;}
+        .hrcard{position:relative;background:radial-gradient(circle at 50% 28%,#4a4230,#15110d);border:2px solid #B8923A;border-radius:13px;padding:8px 4px 6px;text-align:center;cursor:pointer;}
+        .hrcard.wait{filter:grayscale(1) brightness(.55);border-color:#555;cursor:default;}
+        .hrtrain{margin-top:3px;font-size:9px;color:#1a120a;background:#C9A24A;border:none;border-radius:8px;padding:3px 5px;cursor:pointer;width:100%;}
+      `}</style>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 14 }}>
+        <button onClick={onBack} style={{ background: "none", border: "1px solid #6b551f", color: "#C9A24A", borderRadius: 10, padding: "6px 10px", cursor: "pointer", fontFamily: FONT }}>‹ 홈</button>
+        <div style={{ fontFamily: DISPLAY, fontSize: 18, color: "#EBCB67" }}>한자 마왕 봉인전</div>
+      </div>
+
+      {deck.length === 0 ? (
+        <div style={{ textAlign: "center", marginTop: 60, color: "#B9A36E", fontSize: 14, lineHeight: 1.8 }}>아직 도감에 모은 한자가 없어요.<br />«게임 시작»에서 한자를 익히면 출전할 수 있어요!</div>
+      ) : (
+        <div>
+          <div style={{ marginTop: 12, background: "linear-gradient(160deg,#2c2018,#160d0a)", border: "2px solid " + boss.border, borderRadius: 20, padding: "12px 14px 14px", textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "#B9A36E", letterSpacing: 1 }}>시즌 {Math.min(bi + 1, RAID_BOSSES.length)} / {RAID_BOSSES.length}</div>
+            <div style={{ height: 132, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+              {imgBroken
+                ? <div style={{ fontFamily: BRUSH, fontSize: 72, color: "#E8A86B" }}>{boss.han}</div>
+                : <img src={RAID_IMG(bi)} alt={boss.name} onError={() => setImgBroken(true)} style={{ maxHeight: 128, maxWidth: "82%", filter: "drop-shadow(0 5px 10px rgba(0,0,0,.55))" }} />}
+            </div>
+            <div style={{ fontSize: 18, color: "#E8A86B", fontWeight: "bold" }}>{boss.name} ({boss.han})</div>
+            <div style={{ fontSize: 11, color: "#9a8a60", marginBottom: 4 }}>봉인까지 성공 공격 {boss.hp}회 · 1인 최대 {boss.cap}회 기여</div>
+            <div style={{ marginTop: 4, background: "#120a08", border: "1.5px solid #5a3a1a", borderRadius: 99, height: 20, overflow: "hidden", position: "relative" }}>
+              <div style={{ height: "100%", width: Math.min(100, seal / boss.hp * 100) + "%", background: "linear-gradient(90deg,#C9A24A,#F4D03F)", transition: "width .4s" }} />
+              <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", fontSize: 11.5, color: "#fff", textShadow: "0 1px 2px #000" }}>봉인 {seal} / {boss.hp}</div>
+            </div>
+            <div style={{ fontSize: 11, color: "#B9A36E", marginTop: 5 }}>반 전체가 함께 채우는 봉인 게이지</div>
+          </div>
+
+          <div style={{ display: "flex", gap: 7, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
+            <span style={chip}>오늘 도전 <b style={{ color: "#F4D03F" }}>{RAID_DAILY - todayN}</b>/{RAID_DAILY}</span>
+            <span style={chip}>출전 <b style={{ color: "#F4D03F" }}>{chargedCount()}</b>/{RAID_SLOT}</span>
+            <span style={chip}>내 기여 <b style={{ color: "#F4D03F" }}>{myContrib}</b>/{boss.cap}</span>
+          </div>
+
+          <div style={{ marginTop: 12, background: "#16110c", border: "2px solid #6b551f", borderRadius: 18, padding: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around" }}>
+              <div style={{ width: 84, textAlign: "center" }}>
+                <div style={{ width: 74, height: 74, margin: "0 auto", borderRadius: 14, display: "grid", placeItems: "center", fontSize: 36, background: "radial-gradient(circle at 50% 30%,#514732,#14110c)", border: "2px solid #C9A24A", color: "#F4E7B0", fontFamily: BRUSH }}>{sel || "?"}</div>
+                <div style={{ fontSize: 11, color: "#B9A36E", marginTop: 4 }}>{sel ? raidStars((deck.find((c) => c.char === sel) || {}).pw || 1) : "출전 카드 선택"}</div>
+              </div>
+              <div style={{ fontSize: 20, color: "#E8A86B", fontWeight: "bold" }}>⚔</div>
+              <div style={{ width: 84, textAlign: "center" }}>
+                <div style={{ width: 74, height: 74, margin: "0 auto", borderRadius: 14, display: "grid", placeItems: "center", overflow: "hidden", background: "radial-gradient(circle at 50% 30%,#3a1614,#120807)", border: "2px solid #7a1f1a", color: "#E8A86B", fontFamily: BRUSH, fontSize: 30 }}>
+                  {imgBroken ? boss.han : <img src={RAID_IMG(bi)} alt="" onError={() => setImgBroken(true)} style={{ width: "100%", height: "100%", objectFit: "contain" }} />}
+                </div>
+                <div style={{ fontSize: 11, color: "#B9A36E", marginTop: 4 }}>마왕</div>
+              </div>
+            </div>
+            <div style={{ textAlign: "center", fontSize: 24, height: 30, color: "#E8A86B" }}>{clash}</div>
+            <div style={{ textAlign: "center", fontSize: 13.5, marginTop: 6, lineHeight: 1.6, minHeight: 20, color: "#F0E6CE" }}>{allSealed ? "🏆 모든 마왕을 봉인했어요! 한자 수호대가 글자 세상을 지켜냈습니다." : msg}</div>
+          </div>
+
+          <button onClick={onChallenge} disabled={busy || allSealed || sel == null || !charged[sel] || todayN >= RAID_DAILY || myContrib >= boss.cap} style={{ display: "block", width: "100%", marginTop: 10, fontFamily: DISPLAY, fontSize: 16, fontWeight: "bold", cursor: "pointer", border: "none", borderRadius: 14, padding: 13, color: "#1a120a", background: (busy || allSealed || sel == null || !charged[sel] || todayN >= RAID_DAILY || myContrib >= boss.cap) ? "#5a4d2c" : "linear-gradient(180deg,#F4D03F,#C9A24A)" }}>도전!</button>
+
+          <div style={{ fontSize: 13, color: "#B9A36E", margin: "16px 0 4px", display: "flex", justifyContent: "space-between" }}>
+            <span>📖 내 도감 <span style={{ color: "#7d6e4e", fontSize: 11 }}>({deck.length}자, 영구)</span></span>
+            <span style={{ fontSize: 11, color: "#7d6e4e" }}>출전 {chargedCount()} / 대기 {deck.length - chargedCount()}</span>
+          </div>
+          <div style={{ fontSize: 10.5, color: "#7d6e4e", marginBottom: 8, lineHeight: 1.5 }}>도감(영구)에서 한 번에 최대 {RAID_SLOT}장만 «출전» 가능. 공격하면 «대기»로 빠지고, 다시 쓰려면 «수련»해서 장전해요.</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+            {sortedDeck.map((c) => {
+              const on = !!charged[c.char];
+              return (
+                <div key={c.char} className={"hrcard" + (on ? "" : " wait") + (sel === c.char ? " sel" : "")} style={sel === c.char ? { outline: "3px solid #F4D03F", outlineOffset: 1 } : null}
+                  onClick={on && !busy ? () => { setSel(c.char); setMsg("«도전!»을 눌러 3초 안에 음·뜻을 맞혀요"); } : undefined}>
+                  <div style={{ fontFamily: BRUSH, fontSize: 25, color: "#F4E7B0", lineHeight: 1.1 }}>{c.char}</div>
+                  <div style={{ fontSize: 10, color: "#F4D03F", marginTop: 1 }}>{raidStars(c.pw)}</div>
+                  <div style={{ fontSize: 8.5, marginTop: 2, color: on ? "#7BD493" : "#bbb" }}>{on ? "출전" : "대기"}</div>
+                  {!on && <button className="hrtrain" onClick={(e) => { e.stopPropagation(); startTrain(c); }}>수련</button>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {quiz && (
+        <div onClick={(e) => { if (e.target === e.currentTarget && !quiz.timed) setQuiz(null); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.72)", display: "grid", placeItems: "center", padding: 20, zIndex: 60 }}>
+          <div style={{ background: "#1d1610", border: "2px solid #C9A24A", borderRadius: 20, padding: 20, maxWidth: 340, width: "100%", textAlign: "center" }}>
+            {quiz.step && <div style={{ fontSize: 11, color: "#C9A24A", letterSpacing: 1 }}>{quiz.step}</div>}
+            <div style={{ fontFamily: BRUSH, fontSize: 46, color: "#F4E7B0", marginTop: 2 }}>{quiz.head}</div>
+            <div style={{ fontSize: 14, color: "#D8C79A", margin: "6px 0 10px" }} dangerouslySetInnerHTML={{ __html: quiz.qtext }} />
+            {quiz.timed && <div style={{ height: 9, background: "#3a2a1a", borderRadius: 99, margin: "0 0 12px", overflow: "hidden" }}><div style={{ height: "100%", background: "linear-gradient(90deg,#7BD493,#F4D03F 55%,#E58F7A)", animation: "hrshrink " + quiz.limit + "ms linear forwards" }} /></div>}
+            {quiz.options.map((o, i) => (
+              <button key={i} className="hropt" onClick={() => pick(o)} style={quiz.wrong === o ? { borderColor: "#E58F7A" } : null}>{o}{quiz.wrong === o ? "  ✗" : ""}</button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 const pillStyle = { display: "inline-flex", alignItems: "center", gap: 5, fontFamily: DISPLAY, fontSize: 14, background: "#fff", border: "2px solid #EADFC9", borderRadius: 999, padding: "5px 13px", color: "#5A4A33" };
 const Pill = ({ children }) => <span style={pillStyle}>{children}</span>;
@@ -1931,7 +2207,7 @@ function TeacherGate({ onOk, onBack }) {
   );
 }
 
-function TeacherDashboard({ profiles, log, onToggle, lastSeen = {}, unlockAll, onToggleLock, onBack }) {
+function TeacherDashboard({ profiles, log, onToggle, lastSeen = {}, unlockAll, onToggleLock, raidOn, onToggleRaid, onBack }) {
   const [tab, setTab] = useState("students"); // "students" | "gifts"
   const pending = log.filter((e) => !e.given).length;
   const fmt = (ts) => { const d = new Date(ts); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`; };
@@ -1985,6 +2261,15 @@ function TeacherDashboard({ profiles, log, onToggle, lastSeen = {}, unlockAll, o
         </div>
         <button className="btn" onClick={onToggleLock} style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5, fontFamily: DISPLAY, fontSize: 14, borderRadius: 12, padding: "9px 14px", border: `2px solid ${unlockAll ? "#2E9E4F" : "#C9A227"}`, color: unlockAll ? "#1C6E37" : "#8A6A12", background: unlockAll ? "#E8F6EC" : "#FBF3DC" }}>
           <Lock size={15} /> {unlockAll ? "모두 열림" : "순서 잠금"}
+        </button>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, background: "#fff", border: "2px solid #EADFC9", borderRadius: 14, padding: "10px 14px" }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontFamily: DISPLAY, fontSize: 14.5 }}>한자 마왕 봉인전</div>
+          <div style={{ fontSize: 11.5, color: "#9A8A72", marginTop: 2 }}>{raidOn ? "켜짐 — 학생 홈에 봉인전 버튼이 보여요" : "꺼짐 — 학생 홈에 표시되지 않아요"}</div>
+        </div>
+        <button className="btn" onClick={onToggleRaid} style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5, fontFamily: DISPLAY, fontSize: 14, borderRadius: 12, padding: "9px 14px", border: `2px solid ${raidOn ? "#2E9E4F" : "#C9A227"}`, color: raidOn ? "#1C6E37" : "#8A6A12", background: raidOn ? "#E8F6EC" : "#FBF3DC" }}>
+          {raidOn ? "켜짐" : "꺼짐"}
         </button>
       </div>
 
@@ -2221,7 +2506,7 @@ const COMPASS = [
   { C: Jujak, name: "주작", dirHan: "南", pos: { left: "50%", bottom: "0", transform: "translateX(-50%)" } },
 ];
 
-function Home({ student, totalStars, masteredCount, onStart, onHall, onRecords, onTeacher, onChangeUser }) {
+function Home({ student, totalStars, masteredCount, onStart, onHall, onRecords, onTeacher, onChangeUser, onRaid, raidOn }) {
   return (
     <div style={{ paddingBottom: 40 }}>
       <header style={{ paddingTop: 16 }}>
@@ -2266,6 +2551,7 @@ function Home({ student, totalStars, masteredCount, onStart, onHall, onRecords, 
       )}
       <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 11 }}>
         <MenuButton icon={<IconShield />} label="게임 시작" desc="급을 올리며 한자 배우기" onClick={onStart} />
+        {raidOn && <MenuButton icon={<IconOni />} label="한자 마왕 봉인전" desc="반 전체가 함께 마왕을 봉인" onClick={onRaid} />}
         <MenuButton icon={<IconCrown />} label="수호대 명단" desc="명예의 전당" onClick={onHall} />
         <MenuButton icon={<IconTome />} label="내 기록 보기" desc="내가 모은 한자 카드 도감" onClick={onRecords} />
         <MenuButton icon={<IconGift />} label="교사용 대시보드" desc="복(福) 선물 명단 · 학생 현황" onClick={onTeacher} />
@@ -2781,12 +3067,13 @@ function Collection({ progress, totalStars, onBack }) {
 
 function TimeGate() {
   const [now, setNow] = useState(new Date());
+  const [bypass, setBypass] = useState(false);
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
   const h = now.getHours();
-  const blocked = (h >= 22 || h < 7);
+  const blocked = (h >= 22 || h < 7) && !bypass;
   if (blocked) {
     const pad = (n) => (n < 10 ? '0' + n : '' + n);
     return (
@@ -2799,6 +3086,7 @@ function TimeGate() {
             푹 자고 내일 아침에 다시 만나요!
           </p>
           <p style={{ color: '#9a8a60', fontSize: '13px', marginTop: '16px' }}>지금 시각 {pad(now.getHours())}:{pad(now.getMinutes())}</p>
+          <button onClick={() => { const p = window.prompt('교사 확인용 비밀번호를 입력하세요'); if (p === TEACHER_PIN) setBypass(true); else if (p != null) window.alert('비밀번호가 틀렸어요'); }} style={{ marginTop: '22px', fontFamily: 'sans-serif', fontSize: '12px', color: '#9a8a60', background: 'none', border: '1px solid #5a4a2a', borderRadius: '8px', padding: '7px 12px', cursor: 'pointer' }}>교사 확인</button>
         </div>
       </div>
     );
