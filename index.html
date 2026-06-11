@@ -1833,6 +1833,27 @@ function HanjaMaster() {
   const changeUser = () => { setAfterLogin("home"); setScreen("login"); };
   const setUnlock = (v) => { if (_db) _db.ref("settings/unlockAll").set(v).catch(() => {}); else setUnlockAll(v); };
   const setRaidOn = (v) => { if (_db) _db.ref("settings/raidOn").set(v).catch(() => {}); else setRaidOnState(v); };
+  const refreshData = () => {
+    if (!_db) return;
+    _db.ref("students").once("value").then((snap) => {
+      const v = snap.val() || {}; const profs = {}, pws = {}, gifts = {}, ls = {};
+      Object.values(v).forEach((s) => { if (!s || !s.name) return; profs[s.name] = s.progress || {}; pws[s.name] = s.pin; gifts[s.name] = s.gifts || [false, false, false, false]; ls[s.name] = s.lastSeen || 0; });
+      setProfiles(profs); setPasswords(pws); setGiftsGiven(gifts); setLastSeen(ls);
+    }).catch(() => {});
+    _db.ref("giftLog").once("value").then((snap) => {
+      const v = snap.val() || {};
+      setGiftLog(Object.entries(v).map(([id, e]) => ({ id, ...e })).sort((a, b) => (b.ts || 0) - (a.ts || 0)));
+    }).catch(() => {});
+  };
+  const deleteStudent = (name) => {
+    if (_db) { _db.ref("students/" + fbKey(name)).remove().catch(() => {}); }
+    else {
+      setProfiles((p) => { const q = { ...p }; delete q[name]; return q; });
+      setPasswords((g) => { const q = { ...g }; delete q[name]; return q; });
+      setGiftsGiven((g) => { const q = { ...g }; delete q[name]; return q; });
+      setLastSeen((m) => { const q = { ...m }; delete q[name]; return q; });
+    }
+  };
   const toggleGiven = (id) => {
     if (_db) { const e = giftLog.find((x) => x.id === id); _db.ref("giftLog/" + id + "/given").set(e ? !e.given : true).catch(() => {}); }
     else setGiftLog((L) => L.map((e) => (e.id === id ? { ...e, given: !e.given } : e)));
@@ -1892,7 +1913,7 @@ function HanjaMaster() {
         {screen === "collection" && <Collection progress={progress} totalStars={totalStars} onBack={() => setScreen("home")} />}
         {screen === "raid" && <HanjaRaid student={student} progress={progress} onBack={() => setScreen("home")} />}
         {screen === "teacherAuth" && <TeacherGate onOk={() => setScreen("teacher")} onBack={() => setScreen("home")} />}
-        {screen === "teacher" && <TeacherDashboard profiles={profiles} log={giftLog} onToggle={toggleGiven} lastSeen={lastSeen} unlockAll={unlockAll} onToggleLock={() => setUnlock(!unlockAll)} raidOn={raidOn} onToggleRaid={() => setRaidOn(!raidOn)} onBack={() => setScreen("home")} />}
+        {screen === "teacher" && <TeacherDashboard profiles={profiles} log={giftLog} onToggle={toggleGiven} lastSeen={lastSeen} unlockAll={unlockAll} onToggleLock={() => setUnlock(!unlockAll)} raidOn={raidOn} onToggleRaid={() => setRaidOn(!raidOn)} onRefresh={refreshData} onDeleteStudent={deleteStudent} onBack={() => setScreen("home")} />}
       </div>
       {gift && <GiftPopup message={GIFT_MESSAGES[gift.band]} onClose={() => setGift(null)} />}
     </div>
@@ -2208,8 +2229,9 @@ function TeacherGate({ onOk, onBack }) {
   );
 }
 
-function TeacherDashboard({ profiles, log, onToggle, lastSeen = {}, unlockAll, onToggleLock, raidOn, onToggleRaid, onBack }) {
+function TeacherDashboard({ profiles, log, onToggle, lastSeen = {}, unlockAll, onToggleLock, raidOn, onToggleRaid, onRefresh, onDeleteStudent, onBack }) {
   const [tab, setTab] = useState("students"); // "students" | "gifts"
+  const [refreshing, setRefreshing] = useState(false);
   const pending = log.filter((e) => !e.given).length;
   const fmt = (ts) => { const d = new Date(ts); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`; };
   const isToday = (ts) => { if (!ts) return false; const d = new Date(ts), n = new Date(); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate(); };
@@ -2249,6 +2271,7 @@ function TeacherDashboard({ profiles, log, onToggle, lastSeen = {}, unlockAll, o
           <h2 style={{ fontFamily: DISPLAY, fontSize: 23, margin: 0 }}>교사용 대시보드</h2>
           <div style={{ fontSize: 12, color: "#9A8A72" }}>{_db ? "모든 학생 · 실시간" : "이 기기·이번 세션 기준"}</div>
         </div>
+        <button className="btn" onClick={() => { setRefreshing(true); onRefresh(); setTimeout(() => setRefreshing(false), 900); }} disabled={refreshing} style={{ marginLeft: "auto", cursor: "pointer", fontFamily: DISPLAY, fontSize: 13, borderRadius: 12, padding: "8px 12px", border: "2px solid #C9A227", background: "#FBF3DC", color: "#8A6A12" }}>{refreshing ? "갱신 중…" : "↻ 새로고침"}</button>
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
         <TabBtn id="students">👥 학생 현황 {students.length}</TabBtn>
@@ -2286,6 +2309,7 @@ function TeacherDashboard({ profiles, log, onToggle, lastSeen = {}, unlockAll, o
                   {s.todayN > 0 && <span style={{ fontSize: 11.5, fontFamily: DISPLAY, color: "#1C6E37", background: "#E8F6EC", border: "1.5px solid #2E9E4F", borderRadius: 99, padding: "2px 8px" }}>오늘 +{s.todayN}</span>}
                   <span style={{ fontSize: 12.5, color: "#9A8A72" }}>⭐ {s.stars}</span>
                   <span style={{ fontSize: 12.5, color: "#5A4A33", fontFamily: DISPLAY }}><Trophy size={12} /> {s.mastered}/{ALL_CHARS.length}</span>
+                  <button className="btn" onClick={() => { if (window.confirm(`'${s.name}' 학생의 기록을 정말 삭제할까요?\n\n별·진도·도감이 모두 사라지고 되돌릴 수 없어요.`)) onDeleteStudent(s.name); }} title="학생 삭제" style={{ cursor: "pointer", fontFamily: DISPLAY, fontSize: 12, borderRadius: 8, padding: "4px 8px", border: "1.5px solid #E2B4AC", background: "#FBEEEC", color: "#B0392B", flexShrink: 0 }}>삭제</button>
                 </div>
                 <div style={{ height: 6, background: "#EFE7D6", borderRadius: 99, margin: "8px 0 9px" }}>
                   <div style={{ height: "100%", width: `${(s.mastered / ALL_CHARS.length) * 100}%`, background: "#C9A227", borderRadius: 99 }} />
