@@ -1826,6 +1826,7 @@ function HanjaMaster() {
       setGiftsGiven((g) => (g[name] ? g : { ...g, [name]: [false, false, false, false] }));
       setLastSeen((m) => ({ ...m, [name]: Date.now() }));
     }
+    try { localStorage.setItem("hanja_me", name); } catch (e) {}
     setStudent(name); setScreen(afterLogin);
   };
   const needLogin = (dest) => { if (student) setScreen(dest); else { setAfterLogin(dest); setScreen("login"); } };
@@ -2606,7 +2607,11 @@ function Login({ passwords, onLogin, onBack }) {
   const [name, setName] = useState("");
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
-  const names = Object.keys(passwords);
+  const [showAll, setShowAll] = useState(false);
+  let remembered = null; try { remembered = localStorage.getItem("hanja_me"); } catch (e) {}
+  const allNames = Object.keys(passwords);
+  const myName = (remembered && allNames.includes(remembered)) ? remembered : null;
+  const names = (myName && !showAll) ? [myName] : allNames;
   const returning = passwords[name] !== undefined;
   const inputStyle = { width: "100%", boxSizing: "border-box", fontFamily: FONT, fontSize: 16, padding: "12px 14px", borderRadius: 14, border: "2px solid #EADFC9", background: "#FCFAF4", outline: "none", marginTop: 6 };
 
@@ -2642,7 +2647,7 @@ function Login({ passwords, onLogin, onBack }) {
           </div>
           {names.length > 0 && (
             <div style={{ marginTop: 18 }}>
-              <div style={{ fontSize: 12, color: "#9A8A72", marginBottom: 8 }}>다시 들어가기</div>
+              <div style={{ fontSize: 12, color: "#9A8A72", marginBottom: 8 }}>{(myName && !showAll) ? "내 이름으로 들어가기" : "다시 들어가기"}</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {names.map((n) => (
                   <button key={n} className="btn" onClick={() => toPw(n)} style={{ cursor: "pointer", fontFamily: DISPLAY, fontSize: 14, background: "#fff", border: "2px solid #EADFC9", borderRadius: 999, padding: "7px 14px", color: "#5A4A33" }}>🥋 {n}</button>
@@ -2650,7 +2655,13 @@ function Login({ passwords, onLogin, onBack }) {
               </div>
             </div>
           )}
-          <p style={{ textAlign: "center", color: "#B0A083", fontSize: 11.5, marginTop: 20 }}>같은 기기에서 여러 친구가 번갈아 입장할 수 있어요</p>
+          {(myName && !showAll) ? (
+            <p style={{ textAlign: "center", marginTop: 16 }}>
+              <button className="btn" onClick={() => setShowAll(true)} style={{ background: "none", border: "none", color: "#B0A083", fontFamily: DISPLAY, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>내 이름이 아니에요 / 다른 사람</button>
+            </p>
+          ) : (
+            <p style={{ textAlign: "center", color: "#B0A083", fontSize: 11.5, marginTop: 20 }}>본인 이름을 한 번 고르면, 다음부터 이 기기엔 그 이름만 떠요</p>
+          )}
         </>
       ) : (
         <div style={{ marginTop: 24, background: "#fff", border: "2px solid #EADFC9", borderRadius: 22, padding: 18, boxShadow: "0 6px 0 rgba(0,0,0,.05)" }}>
