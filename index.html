@@ -2227,7 +2227,7 @@ function TeacherGate({ onOk, onBack }) {
         <p style={{ color: "#9A8A72", fontSize: 13, margin: 0 }}>선생님 비밀번호를 입력하세요</p>
       </div>
       <div style={{ marginTop: 22, background: "#fff", border: "2px solid #EADFC9", borderRadius: 22, padding: 18, boxShadow: "0 6px 0 rgba(0,0,0,.05)" }}>
-        <input value={pin} autoFocus inputMode="numeric" onChange={(e) => { setPin(e.target.value.replace(/[^0-9]/g, "").slice(0, 6)); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="● ● ● ●" style={inputStyle} />
+        <input value={"●".repeat(pin.length)} autoFocus inputMode="numeric" onChange={(e) => { const v = e.target.value; if (v.length < pin.length) setPin(pin.slice(0, v.length)); else setPin((pin + v.slice(pin.length).replace(/[^0-9]/g, "")).slice(0, 6)); setErr(""); }} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="● ● ● ●" style={inputStyle} />
         {err && <div style={{ color: "#C0392B", fontSize: 12.5, marginTop: 8, textAlign: "center" }}>{err}</div>}
         <button className="btn" onClick={submit} disabled={!pin} style={{ width: "100%", marginTop: 14, cursor: pin ? "pointer" : "not-allowed", border: "none", borderRadius: 16, padding: "14px", fontFamily: DISPLAY, fontSize: 17, color: "#fff", background: pin ? "#D6342C" : "#E0B3AF", boxShadow: pin ? "0 5px 0 rgba(0,0,0,.12)" : "none" }}>들어가기 →</button>
       </div>
@@ -2598,6 +2598,9 @@ function HallOfFame({ profiles, onBack }) {
     const stars = Object.values(prog).reduce((s, p) => s + (p.stars || 0), 0);
     return { name, mastered, stars, isMaster: mastered >= ALL_CHARS.length };
   }).sort((a, b) => b.mastered - a.mastered || b.stars - a.stars);
+  rows.forEach((r, i) => { r.rank = (i > 0 && rows[i - 1].mastered === r.mastered && rows[i - 1].stars === r.stars) ? rows[i - 1].rank : i + 1; });
+  const rankCount = {}; rows.forEach((r) => { rankCount[r.rank] = (rankCount[r.rank] || 0) + 1; });
+  rows.forEach((r) => { r.tied = rankCount[r.rank] > 1; });
   const medal = ["🥇", "🥈", "🥉"];
   return (
     <div style={{ paddingTop: 18 }}>
@@ -2614,7 +2617,10 @@ function HallOfFame({ profiles, onBack }) {
         <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 9 }}>
           {rows.map((r, i) => (
             <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 12, background: "#fff", border: `2px solid ${r.isMaster ? "#C9A227" : "#EADFC9"}`, borderRadius: 16, padding: "12px 14px" }}>
-              <div style={{ width: 32, textAlign: "center", fontFamily: DISPLAY, fontSize: 18, color: "#8A6A12" }}>{medal[i] || i + 1}</div>
+              <div style={{ width: 36, textAlign: "center" }}>
+                {r.tied && <div style={{ fontSize: 9, color: "#C0392B", fontFamily: DISPLAY, lineHeight: 1.1 }}>공동</div>}
+                <div style={{ fontFamily: DISPLAY, fontSize: 18, color: "#8A6A12" }}>{r.rank <= 3 ? medal[r.rank - 1] : r.rank}</div>
+              </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: DISPLAY, fontSize: 17 }}>🥋 {r.name} {r.isMaster && <span style={{ fontSize: 15 }}>👑</span>}</div>
                 <div style={{ fontSize: 12, color: "#9A8A72", display: "flex", gap: 10, marginTop: 1 }}>
