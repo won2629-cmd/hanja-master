@@ -3089,9 +3089,28 @@ function GiftPopup({ message, onClose }) {
   );
 }
 
+// ── 학생 작품 도감 팝업 ──────────────────────────────────────
+// 작품 추가 방법: ① 저장소 art 폴더에 이미지 넣기  ② 아래에 한 줄 추가
+// 예) "國": { img: "art/guk.png", by: "김민준" },
+const CHAR_ART = {
+  "韓": { img: "art/han.png", by: "○○○" },
+};
+
 function Collection({ progress, totalStars, onBack }) {
+  const [artPop, setArtPop] = useState(null);
+  const artTimer = React.useRef(null);
+  useEffect(() => () => clearTimeout(artTimer.current), []);
+  const openArt = (c) => {
+    const a = CHAR_ART[c.char];
+    if (!a) return;
+    setArtPop({ char: c.char, meaning: c.meaning, img: a.img, by: a.by });
+    clearTimeout(artTimer.current);
+    artTimer.current = setTimeout(() => setArtPop(null), 2500);
+  };
+  const closeArt = () => { clearTimeout(artTimer.current); setArtPop(null); };
   return (
     <div>
+      <style>{`@keyframes artPopIn { 0%{transform:scale(.4);opacity:0} 60%{transform:scale(1.06)} 100%{transform:scale(1);opacity:1} }`}</style>
       <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 18 }}>
         <button className="btn" onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", color: "#5A4A33" }}><ChevronLeft size={26} /></button>
         <h2 style={{ fontFamily: DISPLAY, fontSize: 24, margin: 0 }}>한자 카드 도감</h2>
@@ -3104,7 +3123,8 @@ function Collection({ progress, totalStars, onBack }) {
             {st.chars.map((c) => {
               const t = themeFor(st, c); const got = progress[c.char]?.mastered;
               return (
-                <div key={c.char} style={{ borderRadius: 12, padding: "8px 2px", textAlign: "center", background: got ? t.bg : "#F1EADB", border: `2px solid ${got ? t.color : "#E0D5BE"}` }}>
+                <div key={c.char} onClick={() => openArt(c)} style={{ position: "relative", borderRadius: 12, padding: "8px 2px", textAlign: "center", background: got ? t.bg : "#F1EADB", border: `2px solid ${got ? t.color : "#E0D5BE"}`, cursor: CHAR_ART[c.char] ? "pointer" : "default" }}>
+                  {CHAR_ART[c.char] && <span style={{ position: "absolute", top: 2, right: 3, fontSize: 9 }}>🎨</span>}
                   <div style={{ fontFamily: BRUSH, fontSize: 26, color: got ? t.accent : "#C7BBA0" }}>{c.char}</div>
                   <div style={{ fontSize: 9.5, color: got ? "#5A4A33" : "#B6A98F" }}>{got ? c.sound : ""}</div>
                 </div>
@@ -3113,6 +3133,15 @@ function Collection({ progress, totalStars, onBack }) {
           </div>
         </div>
       ))}
+      {artPop && (
+        <div onClick={closeArt} style={{ position: "fixed", inset: 0, background: "rgba(38,28,14,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 80 }}>
+          <div style={{ background: "#FBF6EA", border: "2px solid #C9A24A", borderRadius: 16, padding: "14px 14px 12px", width: 230, textAlign: "center", animation: "artPopIn .35s ease-out" }}>
+            <img src={artPop.img} alt={artPop.char + " 학생 작품"} style={{ width: "100%", borderRadius: 10, display: "block" }} />
+            <p style={{ margin: "10px 0 0", fontFamily: DISPLAY, fontSize: 17, color: "#5A4A33" }}>{artPop.char} <span style={{ fontSize: 13, color: "#9A8A72" }}>{artPop.meaning}</span></p>
+            <p style={{ margin: "2px 0 0", fontSize: 11.5, color: "#B0884A" }}>만든 사람: {artPop.by}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
