@@ -1941,6 +1941,14 @@ const RAID_LUCKY_P = 0.12;  // 힘력 한자(복불복) 발생 확률
 const RAID_IMG = (i) => "raid-boss-" + (i + 1) + ".png";
 const raidToday = () => { const d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
 const raidStars = (n) => "★".repeat(n) + "☆".repeat(3 - n);
+const RAID_STAR_P = 0.20;   // ⭐ 행운의 별 확률
+const RAID_BOK_P = 0.005;   // 🧧 복복자(선생님 선물) 확률
+const HIT_MSGS = ["마왕이 비틀거렸다!", "정통으로 맞았다!", "마왕이 으르렁거린다… 효과가 있다!"];
+const CRIT_MSGS = ["💥 치명타! 마왕이 크게 휘청인다!", "💥 급소를 찔렀다! 엄청난 일격!"];
+const LOW_MSGS = ["마왕이 무릎을 꿇었다! 조금만 더!", "봉인진이 빛나기 시작한다…!"];
+const DODGE_MSGS = ["마왕이 공격을 피했다! 다음엔 맞힐 수 있어!", "마왕이 슬쩍 비켜섰다… 다시 노려보자!"];
+const pickMsg = (arr) => arr[(Math.random() * arr.length) | 0];
+const raidPct = (n, hp) => Math.max(1, Math.round(100 * Math.pow(Math.max(0, 1 - n / hp), 2))); // 체감 HP 곡선(실제 숫자 비공개)
 
 function IconOni({ size = 26 }) {
   return (
@@ -1980,6 +1988,9 @@ function HanjaRaid({ student, progress, onBack }) {
   const [imgBroken, setImgBroken] = useState(false);
   const [msg, setMsg] = useState("출전 카드를 골라 «도전!»을 누르세요");
   const [clash, setClash] = useState("");
+  const [fx, setFx] = useState(null); // {id,type:'dmg'|'star'|'bok',n,crit}
+  const [daily, setDaily] = useState({}); // 오늘의 용사: key -> 오늘 데미지
+  const fxTimer = React.useRef(null);
   const timerRef = React.useRef(null);
   const prevBi = React.useRef(0);
   const loadedRef = React.useRef(false);
@@ -1997,6 +2008,8 @@ function HanjaRaid({ student, progress, onBack }) {
     const h1 = sref.on("value", (s) => { const v = s.val() || { bi: 0, n: 0 }; if (!loadedRef.current) { loadedRef.current = true; prevBi.current = v.bi || 0; } setBi(v.bi || 0); setSeal(v.n || 0); });
     const cref = dbref("raid/contrib");
     const h2 = cref.on("value", (s) => setContrib(s.val() || {}));
+    const dref = dbref("raid/daily/" + raidToday());
+    const h4 = dref.on("value", (s) => setDaily(s.val() || {}));
     const mref = dbref("students/" + key + "/raid");
     const h3 = mref.on("value", (s) => {
       const v = s.val();
@@ -2007,7 +2020,7 @@ function HanjaRaid({ student, progress, onBack }) {
       setDDate(v.dDate || t);
       setDN(v.dDate === t ? (v.dN || 0) : 0);
     });
-    return () => { sref.off("value", h1); cref.off("value", h2); mref.off("value", h3); };
+    return () => { sref.off("value", h1); cref.off("value", h2); dref.off("value", h4); mref.off("value", h3); };
   }, [key, deck.length]);
 
   // 마왕이 봉인되어 다음 마왕으로 넘어가면 슬롯 재장전(보상)
@@ -2020,20 +2033,48 @@ function HanjaRaid({ student, progress, onBack }) {
   const boss = RAID_BOSSES[Math.min(bi, RAID_BOSSES.length - 1)];
   const allSealed = bi >= RAID_BOSSES.length - 1 && seal >= boss.hp;
   const todayN = (dDate === raidToday() ? dN : 0);
+  const pct = allSealed ? 0 : raidPct(seal, boss.hp);
+  const nearSeal = !allSealed && pct <= 3;
 
-  const bumpSeal = () => {
+  const bumpSeal = (dmg) => {
     if (_db) {
       dbref("raid/seal").transaction((cur) => {
         cur = cur || { bi: 0, n: 0 };
         const hp = (RAID_BOSSES[cur.bi] || RAID_BOSSES[0]).hp;
-        if (cur.n + 1 >= hp) { return cur.bi + 1 <= RAID_BOSSES.length - 1 ? { bi: cur.bi + 1, n: 0 } : { bi: cur.bi, n: hp }; }
-        return { bi: cur.bi, n: cur.n + 1 };
+        if (cur.n + dmg >= hp) { return cur.bi + 1 <= RAID_BOSSES.length - 1 ? { bi: cur.bi + 1, n: 0 } : { bi: cur.bi, n: hp }; }
+        return { bi: cur.bi, n: cur.n + dmg };
       }).catch(() => {});
-      dbref("raid/contrib/" + bi + "/" + key).transaction((n) => (n || 0) + 1).catch(() => {});
+      dbref("raid/contrib/" + bi + "/" + key).transaction((n) => (n || 0) + dmg).catch(() => {});
+      dbref("raid/daily/" + raidToday() + "/" + key).transaction((n) => (n || 0) + dmg).catch(() => {});
     } else {
-      setContrib((c) => ({ ...c, [bi]: { ...(c[bi] || {}), [key]: ((c[bi] || {})[key] || 0) + 1 } }));
-      setSeal((s) => { const hp = RAID_BOSSES[bi].hp; if (s + 1 >= hp) { if (bi < RAID_BOSSES.length - 1) setBi((b) => b + 1); return s + 1 >= hp && bi < RAID_BOSSES.length - 1 ? 0 : hp; } return s + 1; });
+      setContrib((c) => ({ ...c, [bi]: { ...(c[bi] || {}), [key]: ((c[bi] || {})[key] || 0) + dmg } }));
+      setSeal((s) => { const hp = RAID_BOSSES[bi].hp; if (s + dmg >= hp) { if (bi < RAID_BOSSES.length - 1) setBi((b) => b + 1); return bi < RAID_BOSSES.length - 1 ? 0 : hp; } return s + dmg; });
+      setDaily((d) => ({ ...d, [key]: (d[key] || 0) + dmg }));
     }
+  };
+
+  const showFx = (f) => { const o = { ...f, id: Date.now() }; setFx(o); clearTimeout(fxTimer.current); fxTimer.current = setTimeout(() => setFx(null), f.type === "bok" ? 3200 : 1700); };
+  const giveStar = (card) => {
+    const target = (card.pw < 3) ? card : (deck.find((c) => charged[c.char] && c.pw < 3) || deck.find((c) => c.pw < 3) || null);
+    if (target && _db) {
+      dbref("students/" + key + "/progress/" + target.char + "/stars").transaction((s) => Math.min(3, (s || 1) + 1)).catch(() => {});
+      setMsg((m) => m + " ⭐ 행운의 별! " + target.char + " 카드가 강해졌어요!");
+      showFx({ type: "star" });
+    } else {
+      bumpSeal(1);
+      setMsg((m) => m + " ⭐ 행운의 별이 마왕에게 명중! 봉인 +1 추가!");
+      showFx({ type: "star" });
+    }
+  };
+  const giveBok = () => {
+    if (_db) dbref("giftLog").push({ student, kind: "raid", ts: Date.now(), given: false }).catch(() => {});
+    setMsg((m) => m + " 🧧 복(福)이 내렸다!! 선생님께 선물을 받으세요!");
+    showFx({ type: "bok" });
+  };
+  const rollFortune = (card) => {
+    const r = Math.random();
+    if (r < RAID_BOK_P) giveBok();
+    else if (r < RAID_BOK_P + RAID_STAR_P) giveStar(card);
   };
 
   const runQuiz = (q) => {
@@ -2052,7 +2093,7 @@ function HanjaRaid({ student, progress, onBack }) {
   const startAttack = (card, boon) => {
     const correct = card.meaning;
     const others = sample(deck.filter((c) => c.char !== card.char), 2).map((c) => c.meaning);
-    const prefix = boon === "win" ? "✨ 힘력 한자! 맞히면 무조건 승리 — " : boon === "again" ? "✨ 힘력 한자! 이번 도전은 공짜 — " : "⚔ 3초 안에! ";
+    const prefix = boon === "win" ? "✨ 힘력 한자! 맞히면 무조건 치명타 — " : boon === "again" ? "✨ 힘력 한자! 이번 도전은 공짜 — " : "⚔ 3초 안에! ";
     runQuiz({ kind: "attack", head: card.char, qtext: prefix + "<b>" + card.char + "</b>의 뜻과 음을 맞혀요", options: shuffle([correct, ...others]), correct, timed: true, limit: 3000, onResult: (ok) => (ok ? doAttack(card, boon) : attackFail(card)) });
   };
   const doAttack = (card, boon) => {
@@ -2062,14 +2103,20 @@ function HanjaRaid({ student, progress, onBack }) {
     const maPw = b.pool[(Math.random() * b.pool.length) | 0];
     setClash("🥋  ⚡  👹"); setMsg("…");
     setTimeout(() => {
-      const win = (boon === "win") || (card.pw >= maPw);
+      const crit = (boon === "win") || (card.pw >= maPw);
+      const dmg = crit ? 2 : 1;
       const free = (boon === "again") ? " ✨ 힘력 한자 — 이번 도전은 공짜!" : "";
-      if (win) { bumpSeal(); setClash(boon === "win" ? "✨ 힘력 승리! ✨" : "✦ 승리! ✦"); setMsg((boon === "win" ? "✨ 힘력 한자! " : "") + card.char + " 승리! 봉인 +1 (마왕 힘 " + maPw + "). " + card.char + "는 «대기»로 빠졌어요." + free); }
-      else { setClash("… 패배 …"); setMsg(card.char + " 패배 (마왕 힘 " + maPw + "). 봉인 +0, «대기»로. 수련해 다시 장전해요." + free); }
+      bumpSeal(dmg);
+      const pctAfter = raidPct(seal + dmg, b.hp);
+      const line = crit ? pickMsg(CRIT_MSGS) : (pctAfter <= 20 ? pickMsg(LOW_MSGS) : pickMsg(HIT_MSGS));
+      setClash(crit ? "💥 치명타!!" : "✦ 명중! ✦");
+      setMsg((boon === "win" ? "✨ 힘력 한자! " : "") + line + " 봉인 +" + dmg + " (내 힘 " + card.pw + " vs 마왕 " + maPw + "). " + card.char + "는 «대기»로." + free);
+      showFx({ type: "dmg", n: dmg, crit });
+      rollFortune(card);
       setSel(null); setBusy(false);
     }, 720);
   };
-  const attackFail = (card) => { setClash("✗ 공격 실패"); setMsg(card.char + " 음·뜻을 못 맞혔어요. 공격 실패(카드는 출전 그대로). 도전 기회만 1 줄었어요."); };
+  const attackFail = (card) => { setClash("👹 회피!"); setMsg(pickMsg(DODGE_MSGS) + " (" + card.char + " 카드는 출전 그대로, 도전 기회만 1 줄었어요.)"); rollFortune(card); };
 
   const onChallenge = () => {
     if (sel == null || busy || !charged[sel] || allSealed) return;
@@ -2107,6 +2154,9 @@ function HanjaRaid({ student, progress, onBack }) {
       <style>{`
         @keyframes hrshrink { from{width:100%} to{width:0} }
         @keyframes hrshake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+        @keyframes hrpop { 0%{transform:scale(.3) translateY(10px);opacity:0} 55%{transform:scale(1.3);opacity:1} 100%{transform:scale(1) translateY(-8px);opacity:1} }
+        @keyframes hrbok { 0%{transform:scale(.2) rotate(-10deg);opacity:0} 60%{transform:scale(1.15) rotate(2deg)} 100%{transform:scale(1) rotate(0);opacity:1} }
+        @keyframes hrglowbar { 0%,100%{box-shadow:0 0 6px rgba(244,208,63,.45)} 50%{box-shadow:0 0 20px rgba(244,208,63,.95)} }
         .hropt{display:block;width:100%;margin-top:8px;font-family:${FONT};font-size:15px;cursor:pointer;border:1.5px solid #6b551f;background:#2a2016;color:#F0E6CE;border-radius:12px;padding:11px;}
         .hrcard{position:relative;background:radial-gradient(circle at 50% 28%,#4a4230,#15110d);border:2px solid #B8923A;border-radius:13px;padding:8px 4px 6px;text-align:center;cursor:pointer;}
         .hrcard.wait{filter:grayscale(1) brightness(.55);border-color:#555;cursor:default;}
@@ -2130,21 +2180,36 @@ function HanjaRaid({ student, progress, onBack }) {
                 : <img src={RAID_IMG(bi)} alt={boss.name} onError={() => setImgBroken(true)} style={{ maxHeight: 128, maxWidth: "82%", filter: "drop-shadow(0 5px 10px rgba(0,0,0,.55))" }} />}
             </div>
             <div style={{ fontSize: 18, color: "#E8A86B", fontWeight: "bold" }}>{boss.name} ({boss.han})</div>
-            <div style={{ fontSize: 11, color: "#9a8a60", marginBottom: 4 }}>봉인까지 성공 공격 {boss.hp}회 · 1인 최대 {boss.cap}회 기여</div>
-            <div style={{ marginTop: 4, background: "#120a08", border: "1.5px solid #5a3a1a", borderRadius: 99, height: 20, overflow: "hidden", position: "relative" }}>
-              <div style={{ height: "100%", width: Math.min(100, seal / boss.hp * 100) + "%", background: "linear-gradient(90deg,#C9A24A,#F4D03F)", transition: "width .4s" }} />
-              <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", fontSize: 11.5, color: "#fff", textShadow: "0 1px 2px #000" }}>봉인 {seal} / {boss.hp}</div>
+            <div style={{ fontSize: 11, color: nearSeal ? "#F4D03F" : "#9a8a60", marginBottom: 4, fontWeight: nearSeal ? "bold" : "normal" }}>{nearSeal ? "⚡ 봉인 직전!! 마왕이 무릎을 꿇었다!" : "반 전체가 함께 마왕의 기운을 깎는 중"}</div>
+            <div style={{ marginTop: 4, background: "#120a08", border: "1.5px solid " + (nearSeal ? "#F4D03F" : "#5a3a1a"), borderRadius: 99, height: 20, overflow: "hidden", position: "relative", animation: nearSeal ? "hrglowbar 1s infinite" : "none" }}>
+              <div style={{ height: "100%", width: pct + "%", background: nearSeal ? "linear-gradient(90deg,#F4D03F,#FFF3B0)" : "linear-gradient(90deg,#7a1f1a,#E0533A)", transition: "width .5s" }} />
+              <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", fontSize: 11.5, color: "#fff", textShadow: "0 1px 2px #000" }}>마왕 HP {pct}%</div>
             </div>
-            <div style={{ fontSize: 11, color: "#B9A36E", marginTop: 5 }}>반 전체가 함께 채우는 봉인 게이지</div>
+            <div style={{ fontSize: 11, color: "#B9A36E", marginTop: 5 }}>반 전체가 함께 무찌르는 마왕의 기운</div>
           </div>
 
           <div style={{ display: "flex", gap: 7, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
-            <span style={chip}>오늘 도전 <b style={{ color: "#F4D03F" }}>{Math.max(0, dailyLimit - todayN)}</b>/{dailyLimit}</span>
+            <span style={chip}>오늘 남은 도전 <b style={{ color: "#F4D03F" }}>{Math.max(0, dailyLimit - todayN)}</b>회</span>
             <span style={chip}>출전 <b style={{ color: "#F4D03F" }}>{chargedCount()}</b>/{RAID_SLOT}</span>
             <span style={chip}>내 기여 <b style={{ color: "#F4D03F" }}>{myContrib}</b>/{boss.cap}</span>
           </div>
+          {(() => {
+            const top = Object.entries(daily).sort((a, b) => b[1] - a[1]).slice(0, 3);
+            if (!top.length) return null;
+            const medals = ["🥇", "🥈", "🥉"];
+            return (
+              <div style={{ marginTop: 9 }}>
+                <div style={{ textAlign: "center", fontSize: 10.5, color: "#7d6e4e", letterSpacing: 1 }}>오늘의 용사</div>
+                <div style={{ display: "flex", gap: 7, justifyContent: "center", marginTop: 4, flexWrap: "wrap" }}>
+                  {top.map(([n, v], i) => <span key={n} style={{ ...chip, fontSize: 11.5 }}>{medals[i]} {n} <b style={{ color: "#F4D03F" }}>{v}</b></span>)}
+                </div>
+              </div>
+            );
+          })()}
 
-          <div style={{ marginTop: 12, background: "#16110c", border: "2px solid #6b551f", borderRadius: 18, padding: 14 }}>
+          <div style={{ marginTop: 12, background: "#16110c", border: "2px solid #6b551f", borderRadius: 18, padding: 14, position: "relative" }}>
+            {fx && fx.type === "dmg" && <div key={fx.id} style={{ position: "absolute", top: 4, right: 22, fontFamily: DISPLAY, fontWeight: "bold", fontSize: fx.crit ? 36 : 27, color: fx.crit ? "#FF6B4A" : "#F4D03F", textShadow: "0 2px 5px #000", animation: "hrpop .55s ease-out both", pointerEvents: "none", zIndex: 5 }}>-{fx.n}</div>}
+            {fx && fx.type === "star" && <div key={fx.id + "s"} style={{ position: "absolute", top: 2, left: 18, fontSize: 32, animation: "hrpop .6s ease-out both", pointerEvents: "none", zIndex: 5 }}>⭐</div>}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around" }}>
               <div style={{ width: 84, textAlign: "center" }}>
                 <div style={{ width: 74, height: 74, margin: "0 auto", borderRadius: 14, display: "grid", placeItems: "center", fontSize: 36, background: "radial-gradient(circle at 50% 30%,#514732,#14110c)", border: "2px solid #C9A24A", color: "#F4E7B0", fontFamily: BRUSH }}>{sel || "?"}</div>
@@ -2152,7 +2217,7 @@ function HanjaRaid({ student, progress, onBack }) {
               </div>
               <div style={{ fontSize: 20, color: "#E8A86B", fontWeight: "bold" }}>⚔</div>
               <div style={{ width: 84, textAlign: "center" }}>
-                <div style={{ width: 74, height: 74, margin: "0 auto", borderRadius: 14, display: "grid", placeItems: "center", overflow: "hidden", background: "radial-gradient(circle at 50% 30%,#3a1614,#120807)", border: "2px solid #7a1f1a", color: "#E8A86B", fontFamily: BRUSH, fontSize: 30 }}>
+                <div key={fx ? fx.id : 0} style={{ width: 74, height: 74, margin: "0 auto", borderRadius: 14, display: "grid", placeItems: "center", overflow: "hidden", background: "radial-gradient(circle at 50% 30%,#3a1614,#120807)", border: "2px solid #7a1f1a", color: "#E8A86B", fontFamily: BRUSH, fontSize: 30, animation: (fx && fx.type === "dmg" && fx.crit) ? "hrshake .4s" : "none" }}>
                   {imgBroken ? boss.han : <img src={RAID_IMG(bi)} alt="" onError={() => setImgBroken(true)} style={{ width: "100%", height: "100%", objectFit: "contain" }} />}
                 </div>
                 <div style={{ fontSize: 11, color: "#B9A36E", marginTop: 4 }}>마왕</div>
@@ -2182,6 +2247,15 @@ function HanjaRaid({ student, progress, onBack }) {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {fx && fx.type === "bok" && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(20,12,4,.82)", display: "grid", placeItems: "center", zIndex: 70, pointerEvents: "none" }}>
+          <div style={{ textAlign: "center", animation: "hrbok .8s ease-out both" }}>
+            <div style={{ fontFamily: BRUSH, fontSize: 130, color: "#F4D03F", textShadow: "0 0 50px rgba(244,208,63,.65)" }}>福</div>
+            <div style={{ fontFamily: DISPLAY, fontSize: 19, color: "#F0E6CE", marginTop: 6 }}>복이 내렸다!! 선생님께 선물을 받으세요 🧧</div>
           </div>
         </div>
       )}
@@ -2359,7 +2433,7 @@ function TeacherDashboard({ profiles, log, onToggle, lastSeen = {}, unlockAll, o
                   <div style={{ width: 40, height: 40, borderRadius: 11, background: "#FBF3DC", border: "2px solid #C9A227", display: "grid", placeItems: "center", fontFamily: BRUSH, fontSize: 22, color: "#A8801F", flexShrink: 0 }}>福</div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontFamily: DISPLAY, fontSize: 16 }}>🥋 {e.student}</div>
-                    <div style={{ fontSize: 11.5, color: "#9A8A72", display: "flex", alignItems: "center", gap: 5 }}><BeltIcon belt={BELTS[e.si]} size={12} /> {BELTS[e.si].grade} · {fmt(e.ts)}</div>
+                    <div style={{ fontSize: 11.5, color: "#9A8A72", display: "flex", alignItems: "center", gap: 5 }}>{e.kind === "raid" ? <span style={{ color: "#B0392B", fontWeight: "bold" }}>🧧 봉인전 복복자 당첨!</span> : <><BeltIcon belt={BELTS[e.si]} size={12} /> {BELTS[e.si].grade}</>} · {fmt(e.ts)}</div>
                   </div>
                   <button className="btn" onClick={() => onToggle(e.id)} style={{ cursor: "pointer", fontFamily: DISPLAY, fontSize: 12.5, borderRadius: 999, padding: "7px 12px", border: "none", color: "#fff", background: e.given ? "#9CB89F" : "#2E9E4F" }}>
                     {e.given ? "지급함 ✓" : "지급 완료"}
