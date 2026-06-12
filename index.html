@@ -53,6 +53,11 @@ try {
   }
 } catch (e) { _db = null; }
 const fbKey = (name) => String(name).trim().replace(/[.#$/\[\]]/g, "_");
+
+/* ---------- 반(학급) 분리 ---------- */
+const CLASSES = { oreo: "오레오", kingdom: "킹덤" };
+let CLASS_KEY = null; // ClassGate에서 선택됨
+const dbref = (p) => _db.ref("classes/" + CLASS_KEY + "/" + p);
 const shuffle = (a) => { const x = [...a]; for (let i = x.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [x[i], x[j]] = [x[j], x[i]]; } return x; };
 const sample = (a, n) => shuffle(a).slice(0, n);
 
@@ -1782,8 +1787,8 @@ function HanjaMaster() {
   // Firebase 실시간 동기화 (연결 안 되면 이 기기 메모리로만 동작)
   useEffect(() => {
     if (!_db) return;
-    const sref = _db.ref("students");
-    const gref = _db.ref("giftLog");
+    const sref = dbref("students");
+    const gref = dbref("giftLog");
     const hs = sref.on("value", (snap) => {
       const v = snap.val() || {}; const profs = {}, pws = {}, gifts = {}, ls = {};
       Object.values(v).forEach((s) => { if (!s || !s.name) return; profs[s.name] = s.progress || {}; pws[s.name] = s.pin; gifts[s.name] = s.gifts || [false, false, false, false]; ls[s.name] = s.lastSeen || 0; });
@@ -1793,9 +1798,9 @@ function HanjaMaster() {
       const v = snap.val() || {};
       setGiftLog(Object.entries(v).map(([id, e]) => ({ id, ...e })).sort((a, b) => (b.ts || 0) - (a.ts || 0)));
     });
-    const cref = _db.ref("settings/unlockAll");
+    const cref = dbref("settings/unlockAll");
     const hc = cref.on("value", (snap) => setUnlockAll(snap.val() === true));
-    const rref = _db.ref("settings/raidOn");
+    const rref = dbref("settings/raidOn");
     const hr = rref.on("value", (snap) => setRaidOnState(snap.val() === true));
     return () => { sref.off("value", hs); gref.off("value", hg); cref.off("value", hc); rref.off("value", hr); };
   }, []);
@@ -1803,7 +1808,7 @@ function HanjaMaster() {
   // 마지막 접속 시각: 로그인한 학생이 켜 있는 동안 주기적으로 기록 (가정 사용 시점 파악용)
   useEffect(() => {
     if (!student) return;
-    const stamp = () => { if (_db) _db.ref("students/" + fbKey(student) + "/lastSeen").set(Date.now()).catch(() => {}); else setLastSeen((m) => ({ ...m, [student]: Date.now() })); };
+    const stamp = () => { if (_db) dbref("students/" + fbKey(student) + "/lastSeen").set(Date.now()).catch(() => {}); else setLastSeen((m) => ({ ...m, [student]: Date.now() })); };
     stamp();
     const t = setInterval(stamp, 60000);
     return () => clearInterval(t);
@@ -1815,7 +1820,7 @@ function HanjaMaster() {
 
   const login = (name, pw) => {
     if (_db) {
-      const ref = _db.ref("students/" + fbKey(name));
+      const ref = dbref("students/" + fbKey(name));
       ref.once("value").then((snap) => {
         if (!snap.exists()) ref.set({ name, pin: pw, progress: {}, gifts: [false, false, false, false], lastSeen: Date.now() });
         else ref.update({ lastSeen: Date.now() });
@@ -1831,22 +1836,22 @@ function HanjaMaster() {
   };
   const needLogin = (dest) => { if (student) setScreen(dest); else { setAfterLogin(dest); setScreen("login"); } };
   const changeUser = () => { setAfterLogin("home"); setScreen("login"); };
-  const setUnlock = (v) => { if (_db) _db.ref("settings/unlockAll").set(v).catch(() => {}); else setUnlockAll(v); };
-  const setRaidOn = (v) => { if (_db) _db.ref("settings/raidOn").set(v).catch(() => {}); else setRaidOnState(v); };
+  const setUnlock = (v) => { if (_db) dbref("settings/unlockAll").set(v).catch(() => {}); else setUnlockAll(v); };
+  const setRaidOn = (v) => { if (_db) dbref("settings/raidOn").set(v).catch(() => {}); else setRaidOnState(v); };
   const refreshData = () => {
     if (!_db) return;
-    _db.ref("students").once("value").then((snap) => {
+    dbref("students").once("value").then((snap) => {
       const v = snap.val() || {}; const profs = {}, pws = {}, gifts = {}, ls = {};
       Object.values(v).forEach((s) => { if (!s || !s.name) return; profs[s.name] = s.progress || {}; pws[s.name] = s.pin; gifts[s.name] = s.gifts || [false, false, false, false]; ls[s.name] = s.lastSeen || 0; });
       setProfiles(profs); setPasswords(pws); setGiftsGiven(gifts); setLastSeen(ls);
     }).catch(() => {});
-    _db.ref("giftLog").once("value").then((snap) => {
+    dbref("giftLog").once("value").then((snap) => {
       const v = snap.val() || {};
       setGiftLog(Object.entries(v).map(([id, e]) => ({ id, ...e })).sort((a, b) => (b.ts || 0) - (a.ts || 0)));
     }).catch(() => {});
   };
   const deleteStudent = (name) => {
-    if (_db) { _db.ref("students/" + fbKey(name)).remove().catch(() => {}); }
+    if (_db) { dbref("students/" + fbKey(name)).remove().catch(() => {}); }
     else {
       setProfiles((p) => { const q = { ...p }; delete q[name]; return q; });
       setPasswords((g) => { const q = { ...g }; delete q[name]; return q; });
@@ -1855,7 +1860,7 @@ function HanjaMaster() {
     }
   };
   const toggleGiven = (id) => {
-    if (_db) { const e = giftLog.find((x) => x.id === id); _db.ref("giftLog/" + id + "/given").set(e ? !e.given : true).catch(() => {}); }
+    if (_db) { const e = giftLog.find((x) => x.id === id); dbref("giftLog/" + id + "/given").set(e ? !e.given : true).catch(() => {}); }
     else setGiftLog((L) => L.map((e) => (e.id === id ? { ...e, given: !e.given } : e)));
   };
 
@@ -1865,15 +1870,15 @@ function HanjaMaster() {
     const t = prev && prev.mastered ? prev.t : Date.now(); // 처음 마스터한 시각 유지
     const rec = { mastered: true, stars: newStars };
     if (t) rec.t = t;
-    if (_db) _db.ref("students/" + fbKey(student) + "/progress/" + ch).set(rec).catch(() => {});
+    if (_db) dbref("students/" + fbKey(student) + "/progress/" + ch).set(rec).catch(() => {});
     else setProfiles((p) => { const cur = p[student] || {}; return { ...p, [student]: { ...cur, [ch]: rec } }; });
     setScreen("map");
     // 깜짝 복(福) 한자: 같은 구간에서 아직 안 받았다면 무작위 타이밍으로 등장
     const band = bandOf(si);
     if (!(giftsGiven[student] || [])[band] && Math.random() < 0.18) {
       if (_db) {
-        _db.ref("students/" + fbKey(student) + "/gifts/" + band).set(true).catch(() => {});
-        _db.ref("giftLog").push({ student, si, band, ts: Date.now(), given: false }).catch(() => {});
+        dbref("students/" + fbKey(student) + "/gifts/" + band).set(true).catch(() => {});
+        dbref("giftLog").push({ student, si, band, ts: Date.now(), given: false }).catch(() => {});
       } else {
         setGiftsGiven((g) => { const arr = [...(g[student] || [false, false, false, false])]; arr[band] = true; return { ...g, [student]: arr }; });
         setGiftLog((L) => [{ id: Date.now() + "-" + Math.random().toString(36).slice(2, 6), student, si, band, ts: Date.now(), given: false }, ...L]);
@@ -1979,18 +1984,18 @@ function HanjaRaid({ student, progress, onBack }) {
   const initedRef = React.useRef(false);
 
   const chargedCount = () => Object.keys(charged).length;
-  const saveMyRaid = (patch) => { if (_db) _db.ref("students/" + key + "/raid").update(patch).catch(() => {}); };
+  const saveMyRaid = (patch) => { if (_db) dbref("students/" + key + "/raid").update(patch).catch(() => {}); };
 
   // 첫 장전 세트
   const firstArm = () => { const o = {}; deck.slice(0, RAID_SLOT).forEach((c) => { o[c.char] = true; }); return o; };
 
   useEffect(() => {
     if (!_db) { setCharged(firstArm()); return; }
-    const sref = _db.ref("raid/seal");
+    const sref = dbref("raid/seal");
     const h1 = sref.on("value", (s) => { const v = s.val() || { bi: 0, n: 0 }; if (!loadedRef.current) { loadedRef.current = true; prevBi.current = v.bi || 0; } setBi(v.bi || 0); setSeal(v.n || 0); });
-    const cref = _db.ref("raid/contrib");
+    const cref = dbref("raid/contrib");
     const h2 = cref.on("value", (s) => setContrib(s.val() || {}));
-    const mref = _db.ref("students/" + key + "/raid");
+    const mref = dbref("students/" + key + "/raid");
     const h3 = mref.on("value", (s) => {
       const v = s.val();
       if (!v && !initedRef.current && deck.length) { initedRef.current = true; mref.set({ charged: firstArm(), dDate: raidToday(), dN: 0 }).catch(() => {}); return; }
@@ -2016,13 +2021,13 @@ function HanjaRaid({ student, progress, onBack }) {
 
   const bumpSeal = () => {
     if (_db) {
-      _db.ref("raid/seal").transaction((cur) => {
+      dbref("raid/seal").transaction((cur) => {
         cur = cur || { bi: 0, n: 0 };
         const hp = (RAID_BOSSES[cur.bi] || RAID_BOSSES[0]).hp;
         if (cur.n + 1 >= hp) { return cur.bi + 1 <= RAID_BOSSES.length - 1 ? { bi: cur.bi + 1, n: 0 } : { bi: cur.bi, n: hp }; }
         return { bi: cur.bi, n: cur.n + 1 };
       }).catch(() => {});
-      _db.ref("raid/contrib/" + bi + "/" + key).transaction((n) => (n || 0) + 1).catch(() => {});
+      dbref("raid/contrib/" + bi + "/" + key).transaction((n) => (n || 0) + 1).catch(() => {});
     } else {
       setContrib((c) => ({ ...c, [bi]: { ...(c[bi] || {}), [key]: ((c[bi] || {})[key] || 0) + 1 } }));
       setSeal((s) => { const hp = RAID_BOSSES[bi].hp; if (s + 1 >= hp) { if (bi < RAID_BOSSES.length - 1) setBi((b) => b + 1); return s + 1 >= hp && bi < RAID_BOSSES.length - 1 ? 0 : hp; } return s + 1; });
@@ -2704,6 +2709,9 @@ function Login({ passwords, onLogin, onBack }) {
           ) : (
             <p style={{ textAlign: "center", color: "#B0A083", fontSize: 11.5, marginTop: 20 }}>본인 이름을 한 번 고르면, 다음부터 이 기기엔 그 이름만 떠요</p>
           )}
+          <p style={{ textAlign: "center", marginTop: 10 }}>
+            <button className="btn" onClick={() => { if (window.confirm("반을 바꿀까요? (지금: " + (CLASSES[CLASS_KEY] || "") + " 수호대)")) { try { localStorage.removeItem("hanja_class"); } catch (e) {} location.reload(); } }} style={{ background: "none", border: "none", color: "#CBBEA4", fontFamily: DISPLAY, fontSize: 11.5, cursor: "pointer", textDecoration: "underline" }}>우리 반이 아니에요? 반 바꾸기 (지금: {CLASSES[CLASS_KEY]} 수호대)</button>
+          </p>
         </>
       ) : (
         <div style={{ marginTop: 24, background: "#fff", border: "2px solid #EADFC9", borderRadius: 22, padding: 18, boxShadow: "0 6px 0 rgba(0,0,0,.05)" }}>
@@ -3147,6 +3155,43 @@ function Collection({ progress, totalStars, onBack }) {
 }
 
 
+/* ---------- 반 선택 (ClassGate) ---------- */
+function ClassGate() {
+  const [cls, setCls] = useState(() => {
+    try { const v = localStorage.getItem("hanja_class"); return CLASSES[v] ? v : null; } catch (e) { return null; }
+  });
+  if (cls) { CLASS_KEY = cls; return <TimeGate />; }
+  const pick = (k) => {
+    try { localStorage.setItem("hanja_class", k); } catch (e) {}
+    CLASS_KEY = k; setCls(k);
+  };
+  const card = { flex: 1, cursor: "pointer", background: "#fff", border: "2px solid #EADFC9", borderRadius: 22, padding: "22px 10px", textAlign: "center", boxShadow: "0 6px 0 rgba(0,0,0,.05)", fontFamily: DISPLAY };
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#FBF7EF", padding: 24, boxSizing: "border-box" }}>
+      <div style={{ width: "100%", maxWidth: 420 }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ width: 116, height: 116, margin: "0 auto", borderRadius: 30, background: "#fff", border: "3px solid #C9A227", display: "grid", placeItems: "center", boxShadow: "0 10px 0 rgba(0,0,0,.06)", animation: "pop .5s both" }}>
+            <span style={{ fontFamily: BRUSH, fontSize: 66, color: "#A85808" }}>守</span>
+          </div>
+          <h1 style={{ fontFamily: DISPLAY, fontSize: 34, margin: "16px 0 2px" }}>한자 수호대</h1>
+          <p style={{ color: "#9A8A72", fontSize: 13, margin: 0 }}>너의 수호대를 선택하라!</p>
+        </div>
+        <div style={{ display: "flex", gap: 12, marginTop: 26 }}>
+          <button className="btn" onClick={() => pick("oreo")} style={card}>
+            <div style={{ fontFamily: BRUSH, fontSize: 34, color: "#1C5E50" }}>玄武</div>
+            <div style={{ fontSize: 19, color: "#3F352A", marginTop: 6 }}>오레오</div>
+          </button>
+          <button className="btn" onClick={() => pick("kingdom")} style={card}>
+            <div style={{ fontFamily: BRUSH, fontSize: 34, color: "#B0392B" }}>朱雀</div>
+            <div style={{ fontSize: 19, color: "#3F352A", marginTop: 6 }}>킹덤</div>
+          </button>
+        </div>
+        <p style={{ textAlign: "center", color: "#B0A083", fontSize: 11.5, marginTop: 18 }}>한 번 고르면 이 기기에 기억돼요. 이름 화면 아래에서 바꿀 수 있어요.</p>
+      </div>
+    </div>
+  );
+}
+
 function TimeGate() {
   const [now, setNow] = useState(new Date());
   const [bypass, setBypass] = useState(false);
@@ -3176,6 +3221,6 @@ function TimeGate() {
   return <HanjaMaster />;
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<TimeGate />);
+ReactDOM.createRoot(document.getElementById('root')).render(<ClassGate />);
 
 </script></body></html>
