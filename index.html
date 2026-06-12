@@ -2598,6 +2598,9 @@ function Home({ student, totalStars, masteredCount, onStart, onHall, onRecords, 
         <MenuButton icon={<IconTome />} label="내 기록 보기" desc="내가 모은 한자 카드 도감" onClick={onRecords} />
         <MenuButton icon={<IconGift />} label="교사용 대시보드" desc="복(福) 선물 명단 · 학생 현황" onClick={onTeacher} />
       </div>
+      <p style={{ textAlign: "center", marginTop: 22 }}>
+        <button className="btn" onClick={() => { if (window.confirm("반을 바꿀까요? (지금: " + (CLASSES[CLASS_KEY] || "") + " 수호대)")) { try { localStorage.removeItem("hanja_class"); } catch (e) {} location.reload(); } }} style={{ background: "none", border: "none", color: "#B0A083", fontFamily: DISPLAY, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>🏫 지금은 {CLASSES[CLASS_KEY]} 수호대 · 반 바꾸기</button>
+      </p>
     </div>
   );
 }
