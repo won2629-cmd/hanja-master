@@ -1991,6 +1991,8 @@ function HanjaRaid({ student, progress, onBack }) {
   const [fx, setFx] = useState(null); // {id,type:'dmg'|'star'|'bok',n,crit}
   const [daily, setDaily] = useState({}); // 오늘의 용사: key -> 오늘 데미지
   const fxTimer = React.useRef(null);
+  const clashTimer = React.useRef(null);
+  const flashClash = (t) => { setClash(t); clearTimeout(clashTimer.current); clashTimer.current = setTimeout(() => setClash(""), 2500); };
   const timerRef = React.useRef(null);
   const prevBi = React.useRef(0);
   const loadedRef = React.useRef(false);
@@ -2109,14 +2111,14 @@ function HanjaRaid({ student, progress, onBack }) {
       bumpSeal(dmg);
       const pctAfter = raidPct(seal + dmg, b.hp);
       const line = crit ? pickMsg(CRIT_MSGS) : (pctAfter <= 20 ? pickMsg(LOW_MSGS) : pickMsg(HIT_MSGS));
-      setClash(crit ? "💥 치명타!!" : "✦ 명중! ✦");
+      flashClash(crit ? "💥 치명타!!" : "✦ 명중! ✦");
       setMsg((boon === "win" ? "✨ 힘력 한자! " : "") + line + " 봉인 +" + dmg + " (내 힘 " + card.pw + " vs 마왕 " + maPw + "). " + card.char + "는 «대기»로." + free);
       showFx({ type: "dmg", n: dmg, crit });
       rollFortune(card);
       setSel(null); setBusy(false);
     }, 720);
   };
-  const attackFail = (card) => { setClash("👹 회피!"); setMsg(pickMsg(DODGE_MSGS) + " (" + card.char + " 카드는 출전 그대로, 도전 기회만 1 줄었어요.)"); rollFortune(card); };
+  const attackFail = (card) => { flashClash("👹 회피!"); setMsg(pickMsg(DODGE_MSGS) + " (" + card.char + " 카드는 출전 그대로, 도전 기회만 1 줄었어요.)"); rollFortune(card); };
 
   const onChallenge = () => {
     if (sel == null || busy || !charged[sel] || allSealed) return;
@@ -2251,7 +2253,7 @@ function HanjaRaid({ student, progress, onBack }) {
               const on = !!charged[c.char];
               return (
                 <div key={c.char} className={"hrcard" + (on ? "" : " wait") + (sel === c.char ? " sel" : "")} style={sel === c.char ? { outline: "3px solid #F4D03F", outlineOffset: 1 } : null}
-                  onClick={on && !busy ? () => { setSel(c.char); setMsg("«도전!»을 눌러 3초 안에 음·뜻을 맞혀요"); } : undefined}>
+                  onClick={on && !busy ? () => { setSel(c.char); setClash(""); setMsg("«도전!»을 눌러 3초 안에 음·뜻을 맞혀요"); } : undefined}>
                   <div style={{ fontFamily: BRUSH, fontSize: 25, color: "#F4E7B0", lineHeight: 1.1 }}>{c.char}</div>
                   <div style={{ fontSize: 10, color: "#F4D03F", marginTop: 1 }}>{raidStars(c.pw)}</div>
                   <div style={{ fontSize: 8.5, marginTop: 2, color: on ? "#7BD493" : "#bbb" }}>{on ? "출전" : "대기"}</div>
