@@ -1940,7 +1940,7 @@ const RAID_DAILY = 10;  // (참고) 예전 고정 한도
 const RAID_LUCKY_P = 0.12;  // 힘력 한자(복불복) 발생 확률
 const RAID_IMG = (i) => "raid-boss-" + (i + 1) + ".png";
 const raidToday = () => { const d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); };
-const raidStars = (n) => "★".repeat(n) + "☆".repeat(3 - n);
+const raidStars = (n) => n <= 3 ? "★".repeat(n) + "☆".repeat(3 - n) : "★★★ +" + (n - 3) + "🌟";
 const RAID_STAR_P = 0.20;   // ⭐ 행운의 별 확률
 const RAID_BOK_P = 0.005;   // 🧧 복복자(선생님 선물) 확률
 const HIT_MSGS = ["마왕이 비틀거렸다!", "정통으로 맞았다!", "마왕이 으르렁거린다… 효과가 있다!"];
@@ -1971,7 +1971,7 @@ function HanjaRaid({ student, progress, onBack }) {
     return Object.keys(progress || {})
       .filter((ch) => progress[ch] && progress[ch].mastered)
       .map((ch) => byChar[ch]).filter(Boolean)
-      .map((c) => ({ char: c.char, meaning: c.meaning, pw: Math.min(3, Math.max(1, (progress[c.char].stars || 1))), words: c.words || [] }));
+      .map((c) => ({ char: c.char, meaning: c.meaning, stars: Math.max(1, (progress[c.char].stars || 1)), pw: Math.min(3, Math.max(1, (progress[c.char].stars || 1))), words: c.words || [] }));
   }, [progress]);
   const curGrade = useMemo(() => { let g = -1; CURRICULUM.forEach((st, i) => { if (st.chars.some((c) => progress[c.char] && progress[c.char].mastered)) g = i; }); return g; }, [progress]);
   const dailyLimit = Math.max(0, curGrade + 1); // 수호대장 11 … 10급 1 (바닥값 없음)
@@ -2057,16 +2057,9 @@ function HanjaRaid({ student, progress, onBack }) {
 
   const showFx = (f) => { const o = { ...f, id: Date.now() }; setFx(o); clearTimeout(fxTimer.current); fxTimer.current = setTimeout(() => setFx(null), f.type === "bok" ? 3200 : 1700); };
   const giveStar = (card) => {
-    const target = (card.pw < 3) ? card : (deck.find((c) => charged[c.char] && c.pw < 3) || deck.find((c) => c.pw < 3) || null);
-    if (target && _db) {
-      dbref("students/" + key + "/progress/" + target.char + "/stars").transaction((s) => Math.min(3, (s || 1) + 1)).catch(() => {});
-      setMsg((m) => m + " ⭐ 행운의 별! " + target.char + " 카드가 강해졌어요!");
-      showFx({ type: "star" });
-    } else {
-      bumpSeal(1);
-      setMsg((m) => m + " ⭐ 행운의 별이 마왕에게 명중! 봉인 +1 추가!");
-      showFx({ type: "star" });
-    }
+    if (_db) dbref("students/" + key + "/progress/" + card.char + "/stars").transaction((s) => (s || 1) + 1).catch(() => {});
+    setMsg((m) => m + " ⭐ 행운의 별! " + card.char + " 카드가 ★" + (card.stars + 1) + "이 됐어요!");
+    showFx({ type: "star" });
   };
   const giveBok = () => {
     if (_db) dbref("giftLog").push({ student, kind: "raid", ts: Date.now(), given: false }).catch(() => {});
@@ -2227,7 +2220,7 @@ function HanjaRaid({ student, progress, onBack }) {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around" }}>
               <div style={{ width: 84, textAlign: "center" }}>
                 <div style={{ width: 74, height: 74, margin: "0 auto", borderRadius: 14, display: "grid", placeItems: "center", fontSize: 36, background: "radial-gradient(circle at 50% 30%,#514732,#14110c)", border: "2px solid #C9A24A", color: "#F4E7B0", fontFamily: BRUSH }}>{sel || "?"}</div>
-                <div style={{ fontSize: 11, color: "#B9A36E", marginTop: 4 }}>{sel ? raidStars((deck.find((c) => c.char === sel) || {}).pw || 1) : "출전 카드 선택"}</div>
+                <div style={{ fontSize: 11, color: "#B9A36E", marginTop: 4 }}>{sel ? raidStars((deck.find((c) => c.char === sel) || {}).stars || 1) : "출전 카드 선택"}</div>
               </div>
               <div style={{ fontSize: 20, color: "#E8A86B", fontWeight: "bold" }}>⚔</div>
               <div style={{ width: 84, textAlign: "center" }}>
@@ -2255,7 +2248,7 @@ function HanjaRaid({ student, progress, onBack }) {
                 <div key={c.char} className={"hrcard" + (on ? "" : " wait") + (sel === c.char ? " sel" : "")} style={sel === c.char ? { outline: "3px solid #F4D03F", outlineOffset: 1 } : null}
                   onClick={on && !busy ? () => { setSel(c.char); setClash(""); setMsg("«도전!»을 눌러 3초 안에 음·뜻을 맞혀요"); } : undefined}>
                   <div style={{ fontFamily: BRUSH, fontSize: 25, color: "#F4E7B0", lineHeight: 1.1 }}>{c.char}</div>
-                  <div style={{ fontSize: 10, color: "#F4D03F", marginTop: 1 }}>{raidStars(c.pw)}</div>
+                  <div style={{ fontSize: 10, color: "#F4D03F", marginTop: 1 }}>{raidStars(c.stars)}</div>
                   <div style={{ fontSize: 8.5, marginTop: 2, color: on ? "#7BD493" : "#bbb" }}>{on ? "출전" : "대기"}</div>
                   {!on && <button className="hrtrain" onClick={(e) => { e.stopPropagation(); startTrain(c); }}>수련</button>}
                 </div>
