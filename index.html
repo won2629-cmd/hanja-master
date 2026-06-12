@@ -1760,7 +1760,9 @@ const GIFT_MESSAGES = [
 const bandOf = (si) => (si <= 2 ? 0 : si <= 5 ? 1 : si <= 8 ? 2 : 3);
 
 /* 교사용 대시보드 비밀번호 (선생님이 자유롭게 바꾸세요) */
-const TEACHER_PIN = "3699";
+const TEACHER_PINS = { oreo: "3699", kingdom: "0301" }; // 반별 교사 비밀번호 (낮 시간 대시보드용)
+const ADMIN_PIN = "3699"; // 개발자 전용 — 밤 10시 이후 잠금 우회는 이 비밀번호만 가능
+const teacherPin = () => TEACHER_PINS[CLASS_KEY] || "3699";
 
 
 const STEPS = [
@@ -2219,7 +2221,7 @@ function BeltIcon({ belt, size = 22 }) {
 function TeacherGate({ onOk, onBack }) {
   const [pin, setPin] = useState("");
   const [err, setErr] = useState("");
-  const submit = () => { if (pin === TEACHER_PIN) onOk(); else { setErr("비밀번호가 틀렸어요"); setPin(""); } };
+  const submit = () => { if (pin === teacherPin()) onOk(); else { setErr("비밀번호가 틀렸어요"); setPin(""); } };
   const inputStyle = { width: "100%", boxSizing: "border-box", fontFamily: FONT, fontSize: 22, letterSpacing: 8, textAlign: "center", padding: "12px 14px", borderRadius: 14, border: "2px solid #EADFC9", background: "#FCFAF4", outline: "none", marginTop: 10 };
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center", paddingBottom: 40 }}>
@@ -3216,7 +3218,7 @@ function TimeGate() {
             푹 자고 내일 아침에 다시 만나요!
           </p>
           <p style={{ color: '#9a8a60', fontSize: '13px', marginTop: '16px' }}>지금 시각 {pad(now.getHours())}:{pad(now.getMinutes())}</p>
-          <button onClick={() => { const p = window.prompt('교사 확인용 비밀번호를 입력하세요'); if (p === TEACHER_PIN) setBypass(true); else if (p != null) window.alert('비밀번호가 틀렸어요'); }} style={{ marginTop: '22px', fontFamily: 'sans-serif', fontSize: '12px', color: '#9a8a60', background: 'none', border: '1px solid #5a4a2a', borderRadius: '8px', padding: '7px 12px', cursor: 'pointer' }}>교사 확인</button>
+          <button onClick={() => { const p = window.prompt('교사 확인용 비밀번호를 입력하세요'); if (p === ADMIN_PIN) setBypass(true); else if (p != null) window.alert('비밀번호가 틀렸어요'); }} style={{ marginTop: '22px', fontFamily: 'sans-serif', fontSize: '12px', color: '#9a8a60', background: 'none', border: '1px solid #5a4a2a', borderRadius: '8px', padding: '7px 12px', cursor: 'pointer' }}>교사 확인</button>
         </div>
       </div>
     );
