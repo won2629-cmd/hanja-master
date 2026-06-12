@@ -2193,8 +2193,11 @@ function HanjaRaid({ student, progress, onBack }) {
           <div style={{ display: "flex", gap: 7, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
             <span style={chip}>오늘 남은 도전 <b style={{ color: "#F4D03F" }}>{Math.max(0, dailyLimit - todayN)}</b>회</span>
             <span style={chip}>출전 <b style={{ color: "#F4D03F" }}>{chargedCount()}</b>/{RAID_SLOT}</span>
-            <span style={chip}>내 기여 <b style={{ color: "#F4D03F" }}>{myContrib}</b>/{boss.cap}</span>
+            <span style={chip}>내 기여 {myContrib >= boss.cap ? <b style={{ color: "#7BD493" }}>완료!</b> : <><b style={{ color: "#F4D03F" }}>{myContrib}</b>/{boss.cap}</>}</span>
           </div>
+          {!allSealed && myContrib >= boss.cap && (
+            <div style={{ textAlign: "center", fontSize: 12.5, color: "#7BD493", marginTop: 9, lineHeight: 1.5 }}>🙌 이 마왕에 내 몫을 다 채웠어요!<br />이제 친구들 차례 — 다음 마왕에서 다시 만나요.</div>
+          )}
           {(() => {
             const top = Object.entries(daily).sort((a, b) => b[1] - a[1]).slice(0, 3);
             if (!top.length) return null;
