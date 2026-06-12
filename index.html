@@ -5,8 +5,8 @@
 <style>html,body{margin:0;background:#FBF7EF;}*{-webkit-tap-highlight-color:transparent;}#loading{font-family:'Gowun Dodum',sans-serif;color:#9A8A72;text-align:center;padding:70px 20px;font-size:15px;}</style>
 </head><body>
 <div id="root"><div id="loading">한자 수호대를 불러오는 중...</div></div>
-<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.14.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -2530,11 +2530,17 @@ const Hyeonmu = () => ( // 현무 (북)
     </g>
   </svg>
 );
+function GuardianFace({ src, C }) {
+  const [bad, setBad] = useState(false);
+  if (bad) return <div style={{ width: "76%", height: "76%" }}><C /></div>;
+  return <img src={src + "?v=2"} alt="" onError={() => setBad(true)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />;
+}
+
 const COMPASS = [
-  { C: Hyeonmu, name: "현무", dirHan: "北", pos: { left: "50%", top: "0", transform: "translateX(-50%)" } },
-  { C: Baekho, name: "백호", dirHan: "西", pos: { left: "0", top: "50%", transform: "translateY(-50%)" } },
-  { C: Cheongnyong, name: "청룡", dirHan: "東", pos: { right: "0", top: "50%", transform: "translateY(-50%)" } },
-  { C: Jujak, name: "주작", dirHan: "南", pos: { left: "50%", bottom: "0", transform: "translateX(-50%)" } },
+  { C: Hyeonmu, name: "현무", dirHan: "北", img: "guardian-hyeonmu.png", pos: { left: "50%", top: "0", transform: "translateX(-50%)" } },
+  { C: Baekho, name: "백호", dirHan: "西", img: "guardian-baekho.png", pos: { left: "0", top: "50%", transform: "translateY(-50%)" } },
+  { C: Cheongnyong, name: "청룡", dirHan: "東", img: "guardian-cheongnyong.png", pos: { right: "0", top: "50%", transform: "translateY(-50%)" } },
+  { C: Jujak, name: "주작", dirHan: "南", img: "guardian-jujak.png", pos: { left: "50%", bottom: "0", transform: "translateX(-50%)" } },
 ];
 
 function Home({ student, totalStars, masteredCount, onStart, onHall, onRecords, onTeacher, onChangeUser, onRaid, raidOn }) {
@@ -2561,7 +2567,7 @@ function Home({ student, totalStars, masteredCount, onStart, onHall, onRecords, 
               {COMPASS.map((g) => (
                 <div key={g.name} style={{ position: "absolute", width: "32%", textAlign: "center", ...g.pos }}>
                   <div style={{ position: "relative", width: "100%", aspectRatio: "1", borderRadius: "50%", background: "radial-gradient(circle at 50% 30%, #4a4230 0%, #15110d 82%)", border: "2px solid #B8923A", boxShadow: "0 5px 12px rgba(0,0,0,.45), inset 0 0 0 4px rgba(201,162,74,.20)", display: "grid", placeItems: "center" }}>
-                    <div style={{ width: "76%", height: "76%" }}><g.C /></div>
+                    <GuardianFace src={g.img} C={g.C} />
                   </div>
                   <div style={{ fontFamily: DISPLAY, fontSize: 13.5, color: "#F0D98C", marginTop: 3, textShadow: "0 1px 0 rgba(0,0,0,.5)" }}><span style={{ color: "#C9A24A" }}>{g.dirHan}</span> {g.name}</div>
                 </div>
