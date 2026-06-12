@@ -2157,6 +2157,8 @@ function HanjaRaid({ student, progress, onBack }) {
         @keyframes hrpop { 0%{transform:scale(.3) translateY(10px);opacity:0} 55%{transform:scale(1.3);opacity:1} 100%{transform:scale(1) translateY(-8px);opacity:1} }
         @keyframes hrbok { 0%{transform:scale(.2) rotate(-10deg);opacity:0} 60%{transform:scale(1.15) rotate(2deg)} 100%{transform:scale(1) rotate(0);opacity:1} }
         @keyframes hrglowbar { 0%,100%{box-shadow:0 0 6px rgba(244,208,63,.45)} 50%{box-shadow:0 0 20px rgba(244,208,63,.95)} }
+        @keyframes hrstar { 0%{transform:scale(.15);opacity:0} 30%{transform:scale(1.45);opacity:1} 50%{transform:scale(.95)} 62%{transform:scale(1.1)} 78%{transform:scale(1.55);opacity:1} 100%{transform:scale(2.3);opacity:0} }
+        @keyframes hrclash { 0%{transform:scale(.3);opacity:0} 45%{transform:scale(1.4)} 68%{transform:scale(.92)} 100%{transform:scale(1);opacity:1} }
         .hropt{display:block;width:100%;margin-top:8px;font-family:${FONT};font-size:15px;cursor:pointer;border:1.5px solid #6b551f;background:#2a2016;color:#F0E6CE;border-radius:12px;padding:11px;}
         .hrcard{position:relative;background:radial-gradient(circle at 50% 28%,#4a4230,#15110d);border:2px solid #B8923A;border-radius:13px;padding:8px 4px 6px;text-align:center;cursor:pointer;}
         .hrcard.wait{filter:grayscale(1) brightness(.55);border-color:#555;cursor:default;}
@@ -2209,7 +2211,14 @@ function HanjaRaid({ student, progress, onBack }) {
 
           <div style={{ marginTop: 12, background: "#16110c", border: "2px solid #6b551f", borderRadius: 18, padding: 14, position: "relative" }}>
             {fx && fx.type === "dmg" && <div key={fx.id} style={{ position: "absolute", top: 4, right: 22, fontFamily: DISPLAY, fontWeight: "bold", fontSize: fx.crit ? 36 : 27, color: fx.crit ? "#FF6B4A" : "#F4D03F", textShadow: "0 2px 5px #000", animation: "hrpop .55s ease-out both", pointerEvents: "none", zIndex: 5 }}>-{fx.n}</div>}
-            {fx && fx.type === "star" && <div key={fx.id + "s"} style={{ position: "absolute", top: 2, left: 18, fontSize: 32, animation: "hrpop .6s ease-out both", pointerEvents: "none", zIndex: 5 }}>⭐</div>}
+            {fx && fx.type === "star" && (
+              <div key={fx.id + "s"} style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none", zIndex: 6 }}>
+                <div style={{ textAlign: "center", animation: "hrstar 1.5s ease-out both" }}>
+                  <div style={{ fontSize: 68, lineHeight: 1, filter: "drop-shadow(0 0 16px rgba(244,208,63,.95))" }}>⭐</div>
+                  <div style={{ fontFamily: DISPLAY, fontSize: 16, color: "#F4D03F", fontWeight: "bold", textShadow: "0 1px 5px #000", marginTop: 2 }}>행운의 별!</div>
+                </div>
+              </div>
+            )}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-around" }}>
               <div style={{ width: 84, textAlign: "center" }}>
                 <div style={{ width: 74, height: 74, margin: "0 auto", borderRadius: 14, display: "grid", placeItems: "center", fontSize: 36, background: "radial-gradient(circle at 50% 30%,#514732,#14110c)", border: "2px solid #C9A24A", color: "#F4E7B0", fontFamily: BRUSH }}>{sel || "?"}</div>
@@ -2223,7 +2232,7 @@ function HanjaRaid({ student, progress, onBack }) {
                 <div style={{ fontSize: 11, color: "#B9A36E", marginTop: 4 }}>마왕</div>
               </div>
             </div>
-            <div style={{ textAlign: "center", fontSize: 24, height: 30, color: "#E8A86B" }}>{clash}</div>
+            <div key={clash + "|" + (fx ? fx.id : 0)} style={{ textAlign: "center", fontSize: clash.includes("치명타") ? 27 : 24, height: 30, fontWeight: "bold", color: clash.includes("치명타") ? "#FF6B4A" : "#E8A86B", textShadow: clash.includes("치명타") ? "0 0 12px rgba(255,107,74,.6)" : "none", animation: clash ? "hrclash .5s ease-out both" : "none" }}>{clash}</div>
             <div style={{ textAlign: "center", fontSize: 13.5, marginTop: 6, lineHeight: 1.6, minHeight: 20, color: "#F0E6CE" }}>{allSealed ? "🏆 모든 마왕을 봉인했어요! 한자 수호대가 글자 세상을 지켜냈습니다." : msg}</div>
           </div>
 
