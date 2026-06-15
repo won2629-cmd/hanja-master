@@ -1936,6 +1936,7 @@ const RAID_BOSSES = [
   { name: "무자대마신", han: "無字大魔神", hp: 1500, cap: 75, pool: [2, 3, 3, 3, 3], border: "#C9A24A" },
 ];
 const RAID_SLOT = 12;   // 출전 슬롯 상한 (한 번에 장전 가능한 카드 수)
+const RAID_TRAIN_WINDOW = 3; // 수련 가능한 앞 차례 카드 수 (강제 순환)
 const RAID_DAILY = 10;  // (참고) 예전 고정 한도
 const RAID_LUCKY_P = 0.12;  // 힘력 한자(복불복) 발생 확률
 const RAID_IMG = (i) => "raid-boss-" + (i + 1) + ".png";
@@ -1982,6 +1983,7 @@ function HanjaRaid({ student, progress, onBack }) {
   const [charged, setCharged] = useState({});
   const [dDate, setDDate] = useState(raidToday());
   const [dN, setDN] = useState(0);
+  const [used, setUsed] = useState({}); // 카드별 마지막 사용 시각 — 수련 순환용
   const [sel, setSel] = useState(null);
   const [busy, setBusy] = useState(false);
   const [quiz, setQuiz] = useState(null);
@@ -2002,7 +2004,7 @@ function HanjaRaid({ student, progress, onBack }) {
   const saveMyRaid = (patch) => { if (_db) dbref("students/" + key + "/raid").update(patch).catch(() => {}); };
 
   // 첫 장전 세트
-  const firstArm = () => { const o = {}; deck.slice(0, RAID_SLOT).forEach((c) => { o[c.char] = true; }); return o; };
+  const firstArm = () => { const o = {}; [...deck].sort((a, b) => ((used[a.char] || 0) - (used[b.char] || 0))).slice(0, RAID_SLOT).forEach((c) => { o[c.char] = true; }); return o; };
 
   useEffect(() => {
     if (!_db) { setCharged(firstArm()); return; }
@@ -2018,6 +2020,7 @@ function HanjaRaid({ student, progress, onBack }) {
       if (!v && !initedRef.current && deck.length) { initedRef.current = true; mref.set({ charged: firstArm(), dDate: raidToday(), dN: 0 }).catch(() => {}); return; }
       if (!v) return;
       setCharged(v.charged || {});
+      setUsed(v.used || {});
       const t = raidToday();
       setDDate(v.dDate || t);
       setDN(v.dDate === t ? (v.dN || 0) : 0);
@@ -2094,7 +2097,8 @@ function HanjaRaid({ student, progress, onBack }) {
   const doAttack = (card, boon) => {
     setBusy(true);
     const b = RAID_BOSSES[bi];
-    const nc = { ...charged }; delete nc[card.char]; setCharged(nc); saveMyRaid({ charged: nc });
+    const nc = { ...charged }; delete nc[card.char]; setCharged(nc);
+    const ts = Date.now(); setUsed((u) => ({ ...u, [card.char]: ts })); saveMyRaid({ charged: nc, ["used/" + card.char]: ts });
     const maPw = b.pool[(Math.random() * b.pool.length) | 0];
     setClash("🥋  ⚡  👹"); setMsg("…");
     setTimeout(() => {
@@ -2125,6 +2129,7 @@ function HanjaRaid({ student, progress, onBack }) {
   const armCard = (card) => { if (chargedCount() >= RAID_SLOT) return; const nc = { ...charged, [card.char]: true }; setCharged(nc); saveMyRaid({ charged: nc }); };
   const startTrain = (card) => {
     if (busy) return;
+    if (!trainable.has(card.char)) { setMsg(card.char + " 카드는 아직 쉬는 중이에요. 앞 차례 카드부터 수련해요!"); return; }
     if (chargedCount() >= RAID_SLOT) { setMsg("출전 슬롯이 꽉 찼어요 (" + RAID_SLOT + "/" + RAID_SLOT + "). 먼저 공격해서 슬롯을 비우세요."); return; }
     const correct = card.meaning;
     const others = sample(deck.filter((c) => c.char !== card.char), 2).map((c) => c.meaning);
@@ -2140,7 +2145,9 @@ function HanjaRaid({ student, progress, onBack }) {
   };
   const trainFail = (card) => setMsg("수련 실패… " + card.char + "의 «수련»을 다시 눌러 도전해요.");
 
-  const sortedDeck = useMemo(() => [...deck].sort((a, b) => (charged[b.char] ? 1 : 0) - (charged[a.char] ? 1 : 0)), [deck, charged]);
+  const waitQueue = useMemo(() => deck.filter((c) => !charged[c.char]).sort((a, b) => ((used[a.char] || 0) - (used[b.char] || 0))), [deck, charged, used]);
+  const trainable = useMemo(() => new Set(waitQueue.slice(0, RAID_TRAIN_WINDOW).map((c) => c.char)), [waitQueue]);
+  const sortedDeck = useMemo(() => [...deck.filter((c) => charged[c.char]), ...waitQueue], [deck, charged, waitQueue]);
 
   const chip = { fontSize: 12, color: "#F0D98C", background: "linear-gradient(150deg,#2c2620,#15110d)", border: "1.5px solid #8A6A22", borderRadius: 99, padding: "6px 12px" };
 
@@ -2240,7 +2247,7 @@ function HanjaRaid({ student, progress, onBack }) {
             <span>📖 내 도감 <span style={{ color: "#7d6e4e", fontSize: 11 }}>({deck.length}자, 영구)</span></span>
             <span style={{ fontSize: 11, color: "#7d6e4e" }}>출전 {chargedCount()} / 대기 {deck.length - chargedCount()}</span>
           </div>
-          <div style={{ fontSize: 10.5, color: "#7d6e4e", marginBottom: 8, lineHeight: 1.5 }}>도감(영구)에서 한 번에 최대 {RAID_SLOT}장만 «출전» 가능. 공격하면 «대기»로 빠지고, 다시 쓰려면 «수련»해서 장전해요.</div>
+          <div style={{ fontSize: 10.5, color: "#7d6e4e", marginBottom: 8, lineHeight: 1.5 }}>한 번에 최대 {RAID_SLOT}장만 «출전» 가능. 공격한 카드는 줄 맨 뒤로 쉬러 가요. «수련»은 앞 차례 {RAID_TRAIN_WINDOW}장만 가능 — 모든 한자가 골고루 출전!</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
             {sortedDeck.map((c) => {
               const on = !!charged[c.char];
@@ -2249,8 +2256,10 @@ function HanjaRaid({ student, progress, onBack }) {
                   onClick={on && !busy ? () => { setSel(c.char); setClash(""); setMsg("«도전!»을 눌러 3초 안에 음·뜻을 맞혀요"); } : undefined}>
                   <div style={{ fontFamily: BRUSH, fontSize: 25, color: "#F4E7B0", lineHeight: 1.1 }}>{c.char}</div>
                   <div style={{ fontSize: 10, color: "#F4D03F", marginTop: 1 }}>{raidStars(c.stars)}</div>
-                  <div style={{ fontSize: 8.5, marginTop: 2, color: on ? "#7BD493" : "#bbb" }}>{on ? "출전" : "대기"}</div>
-                  {!on && <button className="hrtrain" onClick={(e) => { e.stopPropagation(); startTrain(c); }}>수련</button>}
+                  <div style={{ fontSize: 8.5, marginTop: 2, color: on ? "#7BD493" : (trainable.has(c.char) ? "#E8C45A" : "#888") }}>{on ? "출전" : (trainable.has(c.char) ? "대기" : "휴식")}</div>
+                  {!on && (trainable.has(c.char)
+                    ? <button className="hrtrain" onClick={(e) => { e.stopPropagation(); startTrain(c); }}>수련</button>
+                    : <button className="hrtrain" style={{ opacity: 0.3, cursor: "default" }} onClick={(e) => e.stopPropagation()}>쉬는 중</button>)}
                 </div>
               );
             })}
