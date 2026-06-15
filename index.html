@@ -2019,7 +2019,18 @@ function HanjaRaid({ student, progress, onBack }) {
       const v = s.val();
       if (!v && !initedRef.current && deck.length) { initedRef.current = true; mref.set({ charged: firstArm(), dDate: raidToday(), dN: 0 }).catch(() => {}); return; }
       if (!v) return;
-      setCharged(v.charged || {});
+      // 출전 카드가 한 장도 없으면 자동 재장전 (기존 학생 빈 슬롯 복구)
+      const curCharged = v.charged || {};
+      const liveCount = deck.filter((c) => curCharged[c.char]).length;
+      if (liveCount === 0 && !initedRef.current && deck.length) {
+        initedRef.current = true;
+        const o = firstArm();
+        setCharged(o); saveMyRaid({ charged: o });
+        setUsed(v.used || {});
+        const t0 = raidToday(); setDDate(v.dDate || t0); setDN(v.dDate === t0 ? (v.dN || 0) : 0);
+        return;
+      }
+      setCharged(curCharged);
       setUsed(v.used || {});
       const t = raidToday();
       setDDate(v.dDate || t);
