@@ -2917,7 +2917,7 @@ function MapScreen({ stage, stageIndex, progress, onBack, onOpen, onOpenStage })
                 <div style={{ flex: 1 }}>
                   <div style={{ fontFamily: DISPLAY, fontSize: 18 }}>{c.meaning}</div>
                   <div style={{ fontSize: 11.5, color: "#9A8A72" }}>{ready ? `낱말 ${c.words.length}개` : "음뜻 학습"}{t.weekday ? ` · ${t.weekday}요일` : ""}</div>
-                  <div style={{ marginTop: 3, display: "flex", alignItems: "center" }}>{[0,1,2].map((s)=>(<Star key={s} size={13} style={{marginRight:2}} fill={done && progress[c.char].stars>s?"#E8A020":"none"} stroke={done && progress[c.char].stars>s?"#E8A020":"#D8CBB0"} />))}{done && progress[c.char].stars>3 && <span style={{ marginLeft: 3, fontSize: 11.5, fontWeight: "bold", color: "#E8A020" }}>+{progress[c.char].stars-3}🌟</span>}</div>
+                  <div style={{ marginTop: 3, display: "flex", alignItems: "center" }}>{[0,1,2].map((s)=>(<Star key={s} size={13} style={{marginRight:2}} fill={done && progress[c.char].stars>s?"#E8A020":"none"} stroke={done && progress[c.char].stars>s?"#E8A020":"#D8CBB0"} />))}{done && (progress[c.char].stars - 3 > 0) && <span style={{ marginLeft: 3, fontSize: 11.5, fontWeight: "bold", color: "#E8A020" }}>+{progress[c.char].stars - 3}🌟</span>}</div>
                 </div>
                 <div style={{ color: t.color }}>{done ? <RotateCw size={18} /> : <ArrowRight size={20} />}</div>
               </button>
