@@ -1929,11 +1929,11 @@ function HanjaMaster() {
 
 /* ============================ 한자 마왕 봉인전 (반 협동) ============================ */
 const RAID_BOSSES = [
-  { name: "먹그림자", han: "墨影", hp: 400, cap: 20, pool: [1, 1, 1, 2], border: "#4a6b80" },
-  { name: "혼돈귀", han: "混沌鬼", hp: 600, cap: 30, pool: [1, 1, 2, 2, 3], border: "#6a4a8a" },
-  { name: "망각대왕", han: "忘却大王", hp: 800, cap: 40, pool: [1, 2, 2, 3, 3], border: "#3a7a4a" },
-  { name: "흑필마왕", han: "黑筆魔王", hp: 1000, cap: 50, pool: [2, 2, 3, 3, 3], border: "#7a1f1a" },
-  { name: "무자대마신", han: "無字大魔神", hp: 1500, cap: 75, pool: [2, 3, 3, 3, 3], border: "#C9A24A" },
+  { name: "먹그림자", han: "墨影", hp: 400, cap: 100, pool: [1, 1, 1, 2], border: "#4a6b80" },
+  { name: "혼돈귀", han: "混沌鬼", hp: 600, cap: 100, pool: [1, 1, 2, 2, 3], border: "#6a4a8a" },
+  { name: "망각대왕", han: "忘却大王", hp: 800, cap: 100, pool: [1, 2, 2, 3, 3], border: "#3a7a4a" },
+  { name: "흑필마왕", han: "黑筆魔王", hp: 1000, cap: 100, pool: [2, 2, 3, 3, 3], border: "#7a1f1a" },
+  { name: "무자대마신", han: "無字大魔神", hp: 1500, cap: 100, pool: [2, 3, 3, 3, 3], border: "#C9A24A" },
 ];
 const RAID_SLOT = 12;   // 출전 슬롯 상한 (한 번에 장전 가능한 카드 수)
 const RAID_TRAIN_WINDOW = 3; // 수련 가능한 앞 차례 카드 수 (강제 순환)
@@ -2206,11 +2206,8 @@ function HanjaRaid({ student, progress, onBack }) {
           <div style={{ display: "flex", gap: 7, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
             <span style={chip}>오늘 남은 도전 <b style={{ color: "#F4D03F" }}>{Math.max(0, dailyLimit - todayN)}</b>회</span>
             <span style={chip}>출전 <b style={{ color: "#F4D03F" }}>{chargedCount()}</b>/{RAID_SLOT}</span>
-            <span style={chip}>내 기여 {myContrib >= boss.cap ? <b style={{ color: "#7BD493" }}>완료!</b> : <><b style={{ color: "#F4D03F" }}>{myContrib}</b>/{boss.cap}</>}</span>
+
           </div>
-          {!allSealed && myContrib >= boss.cap && (
-            <div style={{ textAlign: "center", fontSize: 12.5, color: "#7BD493", marginTop: 9, lineHeight: 1.5 }}>🙌 이 마왕에 내 몫을 다 채웠어요!<br />이제 친구들 차례 — 다음 마왕에서 다시 만나요.</div>
-          )}
           {(() => {
             const top = Object.entries(daily).sort((a, b) => b[1] - a[1]).slice(0, 3);
             if (!top.length) return null;
